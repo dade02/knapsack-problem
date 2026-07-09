@@ -1,0 +1,5400 @@
+European Journal of Operational Research 289 (2021) 435–455
+
+Contents lists available at ScienceDirect
+
+European Journal of Operational Research
+journal homepage: www.elsevier.com/locate/ejor
+
+Discrete Optimization
+
+A new combinatorial branch-and-bound algorithm for the Knapsack
+Problem with Conﬂicts
+Stefano Coniglio a, Fabio Furini b, Pablo San Segundo c,∗
+a
+
+School of Mathematical Sciences, University of Southampton, University Road, SO17 1BJ Southampton, United Kingdom
+IASI-CNR, Istituto di Analisi dei Sistemi ed Informatica “A. Ruberti”, via dei Taurini 19, 00185 Roma, Italy
+c
+Centre for Automation and Robotics, Universidad Politécnica de Madrid, José Gutiérrez Abascal, 2, 28006 Madrid, Spain
+b
+
+a r t i c l e
+
+i n f o
+
+Article history:
+Received 10 February 2020
+Accepted 15 July 2020
+Available online 26 July 2020
+Keywords:
+Combinatorial optimization
+Knapsack Problem with Conﬂicts
+Maximum Weighted Clique Problem
+Branch-and-bound algorithm
+
+a b s t r a c t
+We study the Knapsack Problem with Conﬂicts, a generalization of the Knapsack Problem in which a set
+of conﬂicts speciﬁes pairs of items which cannot be simultaneously selected. In this work, we propose a
+novel combinatorial branch-and-bound algorithm for this problem based on an n-ary branching scheme.
+Our algorithm effectively combines different procedures for pruning the branch-and-bound nodes based
+on different relaxations of the Knapsack Problem with Conﬂicts. Its main elements of novelty are: (i)
+the adoption of the branching-and-pruned set branching scheme which, while extensively used in the
+maximum-clique literature, was never successfully employed for solving the Knapsack Problem with Conﬂicts; (ii) the adoption of the Multiple-Choice Knapsack Problem for the derivation of upper bounds used
+for pruning the branch-and-bound tree nodes; and (iii) the design of a new upper bound for the latter
+problem which can be computed very eﬃciently. Key to our algorithm is its high pruning potential and
+the low computational effort that it requires to process each branch-and-bound node. An extensive set
+of experiments carried out on the benchmark instances typically used in the literature shows that, for
+edge densities ranging from 0.1 to 0.9, our algorithm is faster by up to two orders of magnitude than the
+state-of-the-art method and by up to several orders of magnitude than a state-of-the-art mixed-integer
+linear programming solver.
+© 2020 Elsevier B.V. All rights reserved.
+
+1. Introduction
+Given a set V of n items with a positive integer proﬁt pi and
+a positive integer weight wi , for all i ∈ V, and an integer capacity
+c, the classical Knapsack Problem (KP) asks for identifying a subset of items of maximum proﬁt whose total weight is no larger
+than c. The KP is one of the most studied problems in combinatorial optimization. The problem is known to be N P -hard (albeit
+weakly) since the seminal work of Karp (1972), and very effective
+algorithms are available for its solution (Martello, Pisinger, & Toth,
+1999). For a comprehensive survey on algorithms and applications,
+we refer the reader to Kellerer, Pferschy, and Pisinger (2004) and
+Martello and Toth (1990).
+In this paper, we study a generalization of the KP known as
+the Knapsack Problem with Conﬂicts (KPC) (or the Knapsack Problem with Conﬂict Graph) (Bettinelli, Cacchiani, & Malaguti, 2017).
+Let G = (V, E ) be a simple undirected (conﬂict) graph with n = |V |
+
+∗
+
+Corresponding author.
+E-mail addresses: s.coniglio@soton.ac.uk (S. Coniglio), f.furini@iasi.cnr.it (F. Furini), pablo.sansegundo@upm.es (P. San Segundo).
+https://doi.org/10.1016/j.ejor.2020.07.023
+0377-2217/© 2020 Elsevier B.V. All rights reserved.
+
+vertices and m = |E | edges. The sets of vertices and edges represent, respectively, knapsack items and conﬂicts between pairs of
+them (i.e., {i, j} ∈ E if and only if items i and j cannot be simultaneously contained in a solution). The KPC asks for a maximum-proﬁt
+conﬂict-free subset of items whose total weight does not exceed
+the knapsack capacity. If the item weights are ignored, the KPC
+admits the Maximum Weighted Independent Set Problem (MWISP)
+as a special case. As the MWISP is strongly N P -hard and inapproximable in polynomial time to within any polynomial factor unless
+P = ZPP (Håstad, 1999), the same hardness result applies to the
+KPC. This shows that the problem is considerably harder than the
+KP.
+The KPC plays an important role in the Operations Research
+literature. It arises as the pricing subproblem when solving with
+branch-and-price algorithms both the Bin Packing Problem (BPP)
+(with a Ryan-Foster branching scheme) (Wei, Luo, Baldacci, & Lim,
+2019) and the Bin Packing Problem with Conﬂicts (BPPC) (with
+any branching scheme) (Bettinelli et al., 2017). Besides its role as
+a subproblem, the KPC is of interest on its own right. Real-world
+applications arise in any context where a subset of items has to
+be selected subject to a capacity (or budget) constraint and a set
+of incompatibility/conﬂict constraints prevents the decision maker
+
+436
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+Fig. 1. (a) A conﬂict graph G with n = 7 vertices (items) and m = 5 edges (conﬂicts); the numbering corresponds to the indices of the vertex set. (b) The proﬁt and weight of
+each vertex are reported separated by a comma; the independent set I = {1, 3, 7} (whose vertices are highlighted in red) is an optimal KPC solution of value KPC (V, 8 ) = 10
+and total weight equal to 8. (For interpretation of the references to color in this ﬁgure legend, the reader is referred to the web version of this article.)
+
+from selecting certain pairs of items. This is the case, for instance,
+of proﬁt-maximization scheduling problems with a single machine,
+in which G is a graph with vertices corresponding to tasks and the
+conﬂicts represent pairs of tasks which cannot be executed in parallel (due to, e.g., requiring the same nonpreemptible resource).
+
+1.1. Notation
+In the remainder of the paper, we adopt both terms “vertex”
+and “item” to identify the members of V. We prefer the former
+when referring to the conﬂict-graph aspect of the KPC and the latter when referring to its knapsack aspect. We use the word node
+only when referring to a node of the branch-and-bound tree.
+Throughout the paper, we call a subset of vertices a clique if
+every pair of its vertices are neighbors. We denote by G = (V, E )
+the complement graph of G, where E is the set of nonedges of G,
+i.e., E = {e = {i, j} with i, j ∈ V : e ∈
+/ E }. We call a subset of vertices
+an independent set (or stable set) if it forms a clique in G. For each
+i ∈ V, we denote its neighborhood by N(i) := {j ∈ V: {i, j} ∈ E} and its
+antineighborhood by N (i ) := { j ∈ V : {i, j} ∈ E }. For each i ∈ V, δ (i)⊆E
+denotes the subset of edges incident with i. For each U⊆V, we denote by G[U] = (U, E[V ] ) the graph induced by U, where E[U] corresponds to the subset of edges incident with two vertices in U.
+Given a subset of items I⊆V, we denote their total proﬁt and
+weight by:
+
+p( I ) =
+
+
+i∈I
+
+pi
+
+and
+
+w (I ) =
+
+
+
+wi .
+
+i∈I
+
+Notice that, for I to be a feasible solution to the KPC, it must be
+an independent set and it must satisfy w(I ) ≤ c. Given any Vˆ ⊆ V
+and cˆ ∈ Z+ (integrality) with cˆ ≤ c, we denote by KPC (Vˆ , cˆ) the optimal solution value of the KPC on an instance with vertex set Vˆ ,
+capacity cˆ, and conﬂicts corresponding to the edges of G[Vˆ ].
+Throughout the paper, we assume that the vertices of G are
+sorted in nonincreasing order of proﬁt-over-weight ratio. That is,
+we assume that the vertex set V = {1, 2, . . . , n} is ordered so to sat-
+
+isfy the following relationship:
+
+p j+1
+pj
+≥
+wj
+w j+1
+
+j = 1, . . . , n − 1.
+
+(1)
+
+1.2. Illustrative example
+Fig. 1 reports an illustration of a KPC instance with 7 vertices
+and 5 conﬂicts (n = 7 and m = 5) and capacity c = 8. Part (a) depicts the conﬂict graph G along with the indices of the vertices.
+Part (b) reports the proﬁt and weight of each vertex separated by
+a comma. The vertices in the independent set I = {1, 3, 7}, highlighted in red, correspond to an optimal KPC solution (of value
+KPC (V, 8 ) = 10).
+1.3. Contributions and outline of the paper
+In this work, we propose a novel branch-and-bound algorithm
+for solving large instances of the KPC which employs an n-ary
+branching scheme based on the “branching and pruned set” approach. We refer to this branch-and-bound method as “combinatorial” since, as we will illustrate, it does not rely on mathematical
+programming techniques for pruning the nodes of the tree. This is
+in line with the usage of the term done in other papers, including (Louveaux & Mathieu, 2014). Our method effectively combines
+the two main aspects of the KPC, its capacity (or KP) aspect and its
+conﬂict (or MWISP) aspect, by relying on different bounding procedures for pruning the individual branch-and-bound nodes as well
+as for reducing the number of child nodes that are generated during the branching phase. Moreover, the algorithm is the ﬁrst, to
+the best of our knowledge, to adopt the Multiple-Choice Knapsack
+Problem for the derivation of upper bounds. In particular, we design a new MCKP-based upper bound, which we refer to as partition bound, that can be computed very eﬃciently in practice.
+The paper is structured as follows. Section 2 summarizes
+previous works on the KPC and on closely related problems.
+Section 3 introduces three Integer Linear Programming (ILP) formulations for the KPC. The new branch-and-bound algorithm that
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+we propose in this paper is presented in Section 4. The bounding procedures used to reduce the size of the branching tree are
+described in Section 5. The implementation details and an illustration of the execution of the algorithm are reported in Section 6.
+The results of an extensive set of experiments carried out to compare our algorithm to the state-of-the-art approaches and to assess
+the relevance of its components are reported in Section 7. Finally,
+Section 8 draws some concluding remarks and highlights directions
+for future works.
+
+2. Previous and related works
+The KPC is originally introduced in Yamada, Kataoka, and
+Watanabe (2002), where the authors propose a local-search and a
+branch-and-bound method, the latter based on the Lagrangian relaxation obtained by dualizing the conﬂict constraints. In Hiﬁ and
+Michrafy (2007), a method is proposed which combines a primal
+heuristic with a ﬁxing procedure based on the lower bound provided by the former to reduce the problem size, after which the
+(reduced) problem is solved via an ILP-based branch-and-bound algorithm. A reactive-search method is proposed in Hiﬁ and Michrafy
+(2006), whereas Akeb, Hiﬁ, and Mounir (2011) introduces a heuristic based on an integer programming formulation which also relies
+on the notion of local branching (Fischetti & Lodi, 2003). In Hiﬁ
+and Otmani (2012) and Hiﬁ (2014), a scatter-search and an iterative rounding search-based heuristic are proposed, respectively.
+The state-of-the-art exact algorithm for solving large instances of
+the KPC is presented in Bettinelli et al. (2017). It consists of a
+branch-and-bound algorithm based on binary branching, and it relies on a fathoming procedure which combines a bounding technique often used for solving the MWISP, see, e.g, Held, Cook, and
+Sewell (2012), with the KP aspect of the KPC.
+Some work has been carried out for the case where the graph
+G has a special topology. In particular, Pferschy and Schauer
+(2009) presents pseudopolynomial-time algorithms capable of producing exact solutions when G is either a chordal graph or a graph
+with bounded tree width, and illustrates how to extend such algorithms to obtain fully polynomial-time approximation schemes. In
+contrast to the MWISP, which is polynomial-time solvable on perfect graphs (Grötschel, Lovász, & Schrijver, 1981), the same paper
+shows that the KPC is strongly N P -hard when G is perfect. This
+property does not hold for every perfect graph though. Indeed, as
+shown in Sadykov and Vanderbeck (2013), the KPC is weakly N P hard when G is an interval graph.
+As we mentioned, the KPC arises as pricing subproblem when
+solving with branch-and-price algorithms the BPP and the BPPC
+(adopting, for the former, a Ryan-Forster branching scheme). In
+this context, Muritiba, Iori, Malaguti, and Toth (2010) proposes
+a two-step algorithm which ﬁrst applies a greedy heuristic and
+then, if no column with negative reduced cost has been found,
+resorts to solving the KPC with a state-of-the-art ILP solver. In
+Elhedhli, Li, Gzara, and Naoum-Sawaya (2011), the KPC is tackled by solving it directly using an ILP formulation. In Sadykov
+and Vanderbeck (2013), an exact approach based on a depth-ﬁrst
+branch-and-bound algorithm is proposed and, for the case where G
+is an interval graph, a pseudopolynomial-time algorithm based on
+dynamic programming. In Wei et al. (2019), an exact (exponentialtime in the worst case) label-setting algorithm is proposed which
+relies on fathoming and dominance rules to reduce the search
+space. To the best of our knowledge, the latter constitutes the state
+of the art when tackling the special type of KPC instances which
+arise when solving the BPP/BPPC with a branch-and-price method.
+As the authors of Wei et al. (2019) state, their algorithm does not
+compete with the one proposed in Bettinelli et al. (2017) when
+tested on the (harder) instances used in the latter work.
+
+437
+
+Notwithstanding the large number of works on the KP,
+see Martello et al. (1999) for the state-of-the-art method, as well
+as the surveys (Kellerer et al., 2004; Martello & Toth, 1990), such
+works are highly problem-speciﬁc and often diﬃcult to extend
+to more general problems. Differently, many of the works on the
+MWISP or on the Maximum Weighted Clique Problem (MWCP),
+which is obtained from the MWISP by complementing G, have
+a general enough structure that lends itself well to extensions.
+For surveys on these problems, we refer the reader to Wu and
+Hao (2015). Many approaches based on mathematical programming are known for solving the MWISP/MWCP, see Nemhauser
+and Sigismondi (1992), Bourjolly, Laporte, and Mercure (1997),
+Rossi and Smriglio (2001), Amaldi, Coniglio, and Gualandi (2010),
+Rebennack et al. (2011), Giandomenico, Rossi, and Smriglio (2013),
+Amaldi, Coniglio, and Gualandi (2014), Coniglio and Tieves (2015),
+Giandomenico, Letchford, Rossi, and Smriglio (2015), and Corrêa,
+Donne, Koch, and Marenco (2018). Nevertheless, the most eﬃcient
+methods known in the literature for these problems and their variants are based on combinatorial branch and bound, see Tomita
+and Kameda (2007), San Segundo, Rodríguez, and Jiménez (2011),
+Held et al. (2012), Maslov, Batsyn, and Pardalos (2014), Hosseinian,
+Fontes, and Butenko (2018), Shimizu, Yamaguchi, and Masuda
+(2018), and San Segundo, Coniglio, Furini, and Ljubić (2019); San
+Segundo, Furini, and Artieda (2019). In particular, for large instances, San Segundo, Coniglio et al. (2019); San Segundo, Furini
+et al. (2019) are the state-of-the-art exact algorithms for the cases
+with weights on the vertices and on the edges, respectively.
+3. Integer Linear Programming formulations for the KPC
+Before introducing our novel branch-and-bound algorithm, we
+present three Integer Linear Programming (ILP) formulations for
+the KPC. We will compare them to our algorithm from a computational standpoint in Section 7.
+Letting, for each item i ∈ V, the variable xi ∈ {0, 1} take value 1 if
+and only if vertex i is part of the solution, a natural ILP formulation
+for the KPC reads as follows:
+
+max
+
+x∈{0,1}|V |
+
+
+
+pi xi
+
+(2)
+
+wi xi ≤ c
+
+(3)
+
+i∈V
+
+
+i∈V
+
+xi + x j ≤ 1,
+
+{i, j} ∈ E.
+
+(4)
+
+The objective function (2) corresponds to the total proﬁt of the
+chosen items. Constraint (3) imposes that the total item weight be
+no larger than the knapsack capacity c. Constraints (4) impose that,
+from each edge {i, j} ∈ E of the conﬂict graph G, at most a vertex
+among i and j be selected. We refer to this formulation as ILP1 .
+The cardinality of Constraints (4) is m which is O(n2 ). A reformulation, originally introduced in Croce and Tadei (1994) for the
+MWCP, featuring fewer constraints than ILP1 can be obtained by
+replacing Constraints (4) by the following constraints:
+
+
+
+x j ≤ |N ( i )| ( 1 − xi ),
+
+i ∈ V.
+
+(5)
+
+j∈N (i )
+
+The cardinality of Constraints (5) is only n. These constraints prevent any vertex in the neighborhood of a vertex i ∈ V from being
+selected if i is contained in the solution (this has to be the case
+since all vertices in N(i) are in conﬂict with i). We refer to this formulation as ILP2 . Note that, while featuring fewer constraints than
+ILP1 , the Linear Programming (LP) relaxation of ILP2 is no tighter
+than that of ILP1 . This is because Constraints (5) can be obtained
+by linear combination of Constraints (4). This is because, for each
+i ∈ V, the constraint in (5) corresponding to i is obtained by lin-
+
+438
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+early combining with unit weights the N(i) constraints in (4) corresponding to all edges {i, j} ∈ δ (i).
+A third ILP formulation, originally proposed in Bettinelli et al.
+(2017), considers a collection C˜(V ) of cliques of G covering all the
+edges in E (i.e., such that, for each edge {i, j} of E, both i and j
+belong to some clique C ∈ C˜(V )). We refer to this formulation as
+ILP3 . To obtain it, it suﬃces to replace Constraints (4) by:
+
+
+
+xi ≤ 1,
+
+C ∈ C˜(V ).
+
+(6)
+
+i∈C
+
+Constraints (6) impose that no more than a single vertex be selected from each clique C ∈ C˜(V ). The LP relaxation of ILP3 is at
+least as tight as that of ILP1 as, for each of Constraints (4) in ILP1 ,
+ILP3 contains a constraint among those in (6) which features more
+variables in the left-hand side while having the same right-hand
+side, thus being at least as tight. Different heuristic procedures
+can be used for creating C˜(V ), among which the one proposed
+in Bettinelli et al. (2017).
+4. A new combinatorial branch-and-bound algorithm
+In this section, we describe our new combinatorial branch-andbound algorithm for solving the KPC. The algorithm is based on an
+n-ary branching scheme relying on the notion of “branching and
+pruned sets”, which we deﬁne in what follows. In particular, we
+rely on several effective bounding techniques to reduce the size of
+the branching tree by pruning its nodes. This includes the adoption
+of a bound derived from the Multiple-Choice Knapsack Problem,
+which, to the best of our knowledge, was never successfully used
+for solving the KPC.
+The nodes of the branch-and-bound tree are obtained by adding
+to the current solution one item at a time in a recursive fashion,
+avoiding any conﬂicting items and guaranteeing that the capacity
+constraint be satisﬁed. Given a node of the tree, let Iˆ ⊆ V be the
+independent set corresponding to the partial solution associated
+with it. Let also LB be the value of the incumbent solution Iinc . If,
+at any node, p(Iˆ) > LB holds, both Iinc and LB are updated.
+We denote by Vˆ the set of vertices not in Iˆ with the property
+that, if any vertex i ∈ Vˆ is individually added to Iˆ, the resulting set
+Iˆ ∪ {i} remains an independent set. Formally, Vˆ corresponds to the
+intersection of the antineighborhoods of the vertices in Iˆ, i.e.:
+
+Vˆ :=
+
+
+
+N ( i ).
+
+(7)
+
+i∈Iˆ
+
+Notice that, by deﬁnition, Vˆ contains all the vertices which are potential candidates for branching. In particular, Vˆ is used to derive
+the branching and pruned sets, as we will describe later. Throughout our algorithm, the elements of Vˆ preserve the order introduced
+in (1) for V. With each set Vˆ , we associate a residual capacity deﬁned as:
+
+c (Vˆ ) := c − w(Iˆ).
+
+(8)
+
+Such a quantity corresponds to the knapsack capacity that is still
+available for selecting vertices from Vˆ after those in Iˆ have been
+chosen. At each node of the branching tree, we update the deﬁnition of Vˆ by removing from it every vertex i ∈ Vˆ with weight larger
+than the residual capacity (i.e., with wi > c (Vˆ )).
+Our branching scheme relies on partitioning the vertex set Vˆ
+into two subsets: the branching set B and the pruned set P. Similar
+branching schemes are used in the majority of the most effective
+combinatorial branch-and-bound algorithms for the MWISP/MWCP
+and their variants, see, e.g., Jiang, Li, and Manyà (2017), Li, Fang,
+Jiang, and Xu (2018); Li, Jiang, and Manyà (2017); Li, Liu, Jiang,
+Many, and Li (2018), San Segundo and Tapia (2014), and San Segundo, Furini et al. (2019); San Segundo, Matia, Rodriguez-Losada,
+and Hernando (2013); San Segundo, Nikolaev, and Batsyn (2015);
+
+San Segundo, Nikolaev, Batsyn, and Pardalos (2016); San Segundo
+et al. (2011). To the best of our knowledge, such a branching
+scheme was never successfully adopted in the context of branchand-bound algorithms for solving the KPC. The overarching idea is
+to determine a set P ⊆ Vˆ of vertices such that the value LB of the
+incumbent solution Iinc cannot be improved by adding any feasible subset of P to it. For a given set P, the set B is deﬁned as
+P’s complement, i.e., B := Vˆ \ P . Since, by deﬁnition of P, at least
+one item from B is necessary to improve the incumbent solution
+Iinc , branching on any of the vertices in P at the current node of
+the tree can be avoided. This way, the branching operations that
+are carried out are more likely to lead to an improvement of LB,
+which, in turn, is likely to lead to a smaller branch-and-bound tree
+due to a more effective pruning. As a consequence, the larger P the
+smaller the number of child nodes of a given branch-and-bound
+node.
+After P and, consequently, B, have been determined, we carry
+out a |B|-ary branching operation, creating a tree node per vertex
+i ∈ B by adding i to Iˆ. The effective procedure we adopt to construct
+a “small” branching set B and, therefore, a “large” pruned set P is
+described in the next subsection.
+4.1. Constructing the branching and pruned sets B and P: the
+PARTITION procedure
+In principle, the largest pruned set P and the corresponding
+smallest branching set B can be obtained by solving the following
+problem:
+
+P := arg max
+P̄ ⊆Vˆ
+
+
+
+|P̄| : LB − p(Iˆ) ≥ KPC (P̄, c(Vˆ )) and B := Vˆ \ P.
+(9)
+
+By construction, P is the largest subset of Vˆ with the property that,
+since LB − p(Iˆ) ≥ KPC (P, c (Vˆ )), one has to add to the current solution Iˆ at least an item from P’s complement (i.e., from B) to obtain
+a solution of strictly better value than the incumbent (of value LB).
+Solving Problem (9) can be, unfortunately, computationally very
+hard, as the problem is a 2P -hard bilevel programming problem. 1 .
+This can be proved by following an argument similar to the one
+used in San Segundo, Coniglio et al. (2019) in the context of the
+maximum edge-weighted clique problem. Aiming at an eﬃcient
+branch-and-bound method, it is therefore crucial to design an eﬃcient heuristic procedure for constructing the set P.
+The procedure we propose in this paper, which we refer to as
+PARTITION, is constructive and relies on an eﬃcient method for
+computing an upper bound UB(P) on KPC (P, c (Vˆ )) and for updating it alongside P. In particular, the procedure operates in a greedy
+fashion, maintaining the following invariant:
+
+LB − p(Iˆ) ≥ UB(P ).
+
+(10)
+
+Note that, by deﬁnition of UB(P), the invariant implies LB −
+p(Iˆ) ≥ KPC (P, c (Vˆ )). For each node of the branch-and-bound tree,
+PARTITION starts by letting B := Vˆ and P := ∅. It then, iteratively,
+takes every vertex j ∈ B into account and checks if, by adding j to P
+(and removing it from B), the following condition is satisﬁed:
+
+LB − p(Iˆ) ≥ UB(P ∪ { j} ).
+1
+For a general reference to bilevel optimization, we refer the reader to Dempe
+(2002). For recent work on combinatorial bilevel optimization, see DeNegre and
+Ralphs (2009), Amaldi, Capone, Coniglio, and Gianoli (2013), Basilico, Coniglio, and
+Gatti (2016); Basilico, Coniglio, Gatti, and Marchesi (2017), Fischetti, Ljubic, Monaci,
+and Sinnl (2017, 2018), and Furini, Ljubic, Malaguti, and Paronuzzi (2020); Furini,
+Ljubic, Martin, and San Segundo (2019), as well as the surveys (Bolusani, Coniglio,
+Ralphs, & Tahernejad, 2020; Colson, Marcotte, & Savard, 2005).
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+If this is the case, we let P := P ∪ {j}. If not, j remains in B and the
+next vertex in B is examined. The procedure stops when all vertices
+in Vˆ have been examined.
+The upper bound UB(P) we rely on for constructing P is similar to those often used in branch-and-bound algorithms for the
+MWISP/MWCP, see, e.g, Held et al. (2012), Li, Fang et al. (2018),
+and San Segundo, Furini et al. (2019). It is obtained by considering a relaxation of the formulation ILP3 with vertex set P which
+features only a subset P (P ) of the collection of cliques in G[P]
+forming a partition of the vertices, dropping the capacity constraint
+in (3) as well as any integrality constraints on the variables. The
+bound UB(P) is provided by the following primal-dual pair of LPs:
+
+max
+
+
+
+x≥0
+
+= min
+π ≥0
+
+pi xi :
+
+i∈P
+
+ 
+
+
+
+xi ≤ 1, C ∈ P ( P )
+
+
+
+i∈C
+
+
+πC : πC (i) ≥ pi , i ∈ P ,
+
+C∈P (P )
+
+where, for all i ∈ P, C(i) is the unique clique in P (P ) containing
+item i. The unique optimal solution to the dual is obtained by letting πC∗ := maxi∈C { pi }. This leads us to the following clique partition
+upper bound:
+
+UBC (P ) :=
+
+
+
+πC∗ .
+
+(11)
+
+C∈P (P )
+
+We note that, differently from our algorithm, the works in Held
+et al. (2012), Li, Fang et al. (2018), and San Segundo, Furini et al.
+(2019) consider a clique cover of P, rather than a partition. While
+employing a cover could result in a tighter upper bound, it would
+come at a higher computational cost, as it would require the generation of a (much) larger number of cliques and it would not allow
+for a closed-form computation of the bound.
+In our algorithm, the PARTITION procedure constructs P (P )
+iteratively alongside the corresponding upper bound UBC (P). When
+it halts, P corresponds to the union of the vertices of the cliques
+that have been created. The procedure, which is inspired by the
+greedy sequential independent-set coloring algorithm proposed
+in San Segundo et al. (2011) for the MWCP with unit weights, takes
+as input the set Vˆ , the solution value LB of the incumbent, and the
+total proﬁt p(Iˆ) of the solution Iˆ that corresponds to the current
+branch-and-bound node. Key to PARTITION is the notion of budget, deﬁned as:
+budget := LB − p(Iˆ) − UBC (P ).
+
+(12)
+
+We rely on such notion for checking whether an item i ∈ B can be
+added to P without violating the invariant (10).
+The PARTITION procedure builds the cliques in P (P ) one at a
+time. When building clique C (starting from the empty set), it examines each vertex i ∈ B and checks whether C ∪ {i} is a clique. If
+this is the case, it further tests whether, with the value of πC∗ that
+would be obtained by adding i to C, the value of budget would
+be nonnegative. If both conditions hold, vertex i is removed from
+B and added to C and P. If not, vertex i remains in B and the next
+vertex is examined. The procedure halts when either (i) no additional vertices in B can be added to P without resulting in a negative budget (which implies that no more vertices can be added
+to C without violating the invariant) or (ii) P = Vˆ . Whenever the
+procedure ﬁnds that adding a vertex i ∈ B to C would result in a
+negative budget, i is discarded. This is because, by design of the
+algorithm, such vertex would lead to a negative budget even if it
+were added to one of the cliques the procedure is yet to construct.
+The PARTITION procedure considers the vertices in Vˆ in reverse proﬁt-over-weight order (i.e., in reverse order w.r.t. the order in (1)). This way, P is more likely to contain vertices with low
+proﬁt-over-weight ratio, leaving those with a higher ratio in the
+
+439
+
+set B. As we branch by adding the vertices in B to the current solution Iˆ one at a time, with this choice we are more likely to obtain
+solutions with high proﬁt at the earlier stages of the algorithm.
+5. Bounding procedures for pruning individual nodes
+In our algorithm, we consider different bounds for pruning individual nodes of the branch-and-bound tree. They are of two families. The ﬁrst family is based on the KP relaxation of the KPC that
+is obtained by dropping the conﬂict constraints. The second family relies on the Multiple-Choice Knapsack Problem (MCKP), a special case of the KPC in which the conﬂict graph is a collection of
+pairwise disjoint cliques. Notice that, while, traditionally, the MCKP
+asks for selecting exactly one item per clique, the problem asking
+for selecting at most an item per clique can be reduced to the traditional one by adding a dummy item to each clique with 0 proﬁt
+and 0 weight. The MCKP has been widely studied in the literature,
+see, e.g., Pisinger (1995) and Sinha and Zoltners (1979), and Ch. 11
+of Kellerer et al. (2004). To the best of our knowledge, it was never
+used for deriving bounds in the context of algorithms for solving
+the KPC.
+We note that, in spite of the KPC being strongly N P -hard, all
+the bounds we consider in our algorithm correspond to weakly
+N P -hard problems (the KP and the MCKP) and to relaxations
+of either of them which are computable in polynomial time.
+As better explained in the following, in our algorithm we compute the polynomial-time bounds at each branch-and-bound node,
+while we compute the weakly N P -hard ones only once (at the
+root node) in such a way that they are valid in every node of
+the branch-and-bound tree, and store them in lookup-tables (see
+Sections 5.1.1 and 5.2.1).
+All the upper bounds that we introduce in the following are
+valid for the instance of the KPC corresponding to the current
+branch-and-bound node with vertex set Vˆ and residual capacity
+c (Vˆ ), i.e., for KPC (Vˆ , c (Vˆ )). A branch-and-bound node with vertex
+set Vˆ can be pruned whenever the upper bound on KPC (Vˆ , c (Vˆ ))
+is less or equal than LB − p(Iˆ). This is because, if KPC (Vˆ , c (Vˆ )) ≤
+LB − p(Iˆ), no subset of vertices in Vˆ suﬃces to create a feasible
+solution better than the incumbent.
+We introduce the following notation, which will be used in the
+remainder of the section. For a given set Vˆ of cardinality  := |Vˆ | ≤
+n and with items respecting the order in (1), let α be a function
+which, given the position j ∈ {1, . . . , } of an item in Vˆ , returns its
+index α j (Vˆ ) in V. An example of Vˆ and its mapping is provided
+in Fig. 4. Given Vˆ , we deﬁne V̌ as the superset of Vˆ obtained by
+considering all the items in V whose index in V is greater than
+or equal to α1 (Vˆ ) (such value corresponds to the ﬁrst item in Vˆ ).
+Notice that there are as many sets V̌ as the number of items n.
+Indeed, we have a set V̌ = { j, . . . , n} for each item j ∈ V.
+5.1. KP-based upper bounds
+Consider the KP relaxation of the KPC obtained by ignoring the
+conﬂict graph. It corresponds to the following upper bound:
+
+UBKP (Vˆ ) := max
+
+x∈{0,1}|Vˆ |
+
+
+i∈Vˆ
+
+pi xi :
+
+
+
+
+
+wi xi ≤ c (Vˆ ) .
+
+(13)
+
+i∈Vˆ
+
+Computing the bound (13) for the associated vertex set Vˆ at
+each branch-and-bound node would be too time consuming. To
+avoid this, we rely on two strategies which we describe in the
+remainder of the section. The ﬁrst one is also used in previous
+works including (Bettinelli et al., 2017; Sadykov & Vanderbeck,
+2013), whereas the second one is an improvement on the classical Dantzig upper bound, also used in the aforementioned papers.
+
+440
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+5.1.1. KP-based lookup-table upper bound
+The ﬁrst strategy derives an upper bound on (13) by considering a further relaxation of the associated KP problem where, rather
+than Vˆ , its superset V̌ is considered. The upper bounds UBKP (V̌ )
+of (13) associated with all possible sets V̌ (i.e., with all possible
+sets { j, . . . , n}, j ∈ V) and all possible capacity values s = {0, . . . , c}
+can be precomputed at the root node of the branch-and-bound
+tree in O(n c) via the classical Dynamic Programming (DP) algorithm for the KP, see, e.g., Martello and Toth (1990), and stored in
+a lookup-table. The DP algorithm relies on the following recursive
+equation:
+
+f ( j, s ) := max{ f ( j + 1, s ), f ( j + 1, s − w j ) + p j },
+where f(j, s) is the optimal solution value of a restriction of the
+problem to the items in { j, . . . , n} and a capacity of s ≤ c. The recursion starts with j = n and proceeds backwards (the next item of
+the recursion being j = n − 2). The function f(j, s) returns value 0
+if j = n + 1 for all s ≥ 0 and it returns −∞ if s < 0. By accessing the
+lookup-table in position j = α1 (Vˆ ) and s = c (Vˆ ), we can recover
+the following KP-based lookup-table upper bound in O(1):
+
+UBL1 (Vˆ ) := f (α1 (Vˆ ), c (Vˆ )).
+
+(14)
+
+5.1.2. Martello–Toth upper bound
+The second strategy considers the vertex set Vˆ and it relaxes
+the integrality of the variables. For this purpose, we rely on the
+classical Martello-Toth upper bound valid for the KP (Martello &
+Toth, 1977), which improves over the Dantzig upper bound (see,
+e.g., Martello & Toth, 1990). Let t be the position of the critical
+item in Vˆ , i.e., the position in {1, . . . , |Vˆ |} taken by the ﬁrst (w.r.t.
+the order in (1)) item in Vˆ satisfying two properties: (i) the total weight of the items in the set {α1 (Vˆ ), . . . , αt (Vˆ )} exceeds the
+residual capacity c (Vˆ ) and (ii) the total weight of those in the
+set {α1 (Vˆ ), . . . , αt−1 (Vˆ )} does not. Let c̄ (Vˆ ) be the difference between the residual capacity c (Vˆ ) and the capacity consumed by
+all the items preceding the critical one, namely: c̄ (Vˆ ) := c (Vˆ ) −
+t−1
+j=1 wα (Vˆ ) . The Martello–Toth bound reads:
+j
+
+
+
+
+
+UBMT (Vˆ ) := max UB0 (Vˆ ), UB1 (Vˆ ) ,
+
+(15)
+
+where
+
+UB0 (Vˆ ) :=
+
+t−1
+
+j=1
+
+UB1 (Vˆ ) :=
+
+t−1
+
+
+
+
+pt+1
+pα (Vˆ ) + c (Vˆ )
+j
+wt+1
+
+
+
+j=1
+
+
+
+x∈{0,1}|Vˆ |
+
+
+
+pi xi :
+
+i∈Vˆ
+
+
+
+wi xi ≤ c (Vˆ ),
+
+i∈Vˆ
+
+
+
+xi ≤ 1, C ∈ P (Vˆ ) .
+
+(16)
+
+i∈C
+
+As solving the MCKP in (16) at each branch-and-bound node
+(associated with the corresponding vertex set Vˆ ) can be computationally expensive, we consider different relaxations. In our algorithm, before resorting to them we check whether the problem
+in (16) can be solved in closed form for the set Vˆ at hand.
+Let, for each C ∈ P (Vˆ ), i(C) := arg maxi ∈ C {pi } be the index of an
+item of maximum proﬁt in C (breaking ties in nondecreasing order
+of weight). If {i(C )}C∈P (Vˆ ) is a feasible solution, i.e., if it satisﬁes
+the capacity constraint, the optimal value of the MCKP instance
+
+in (16) is C∈P (Vˆ ) pi(C ) . If the condition is not satisﬁed, we resort
+to two upper bounds which we now introduce.
+5.2.1. MCKP-based lookup-table bound
+Consider the superset V̌ = { j, . . . , n} of Vˆ as done in
+Section 5.1.1, and a clique partition P (V̌ ) of V̌ . The upper
+bound UBMCKP (V̌ ) on (16) associated with all sets V̌ and all possible capacity values s ∈ {0, . . . , c} can be computed in O(n c) via
+a well-known DP algorithm for the MCKP, see, e.g., Pferschy and
+Schauer (2009). The algorithm is based on the following recursive
+equation:
+
+g j (s,  ) := max
+
+max
+
+i∈C :wi ≤s
+
+g j (s − wi ,  − 1 ) + pi , g j (s,  − 1 ) ,
+(17)
+
+where gj (s, ) is the optimal solution value of the restriction of
+
+the MCKP obtained by considering the ﬁrst  cliques ( ≤ |P (V̌ )|),
+their items, and a capacity of s ≤ c. The recursion starts with  = 1
+and proceeds onward, with the next clique of the recursion being
+ + 1. The function gj (s, ) returns 0 if  = 0 for all s ≥ 0.
+Differently from the recursion of Section 5.1.1, where the
+lookup-table can be entirely constructed in O(n c) by simply examining the items in reverse order of V̌ , in this case we need to
+run the DP algorithm for the MCKP n times, once for each item
+j ∈ V. This results in an O(n2 c) algorithm. We obtain the following
+MCKP-based lookup-table upper bound:
+
+UBL2 (Vˆ ) := gα1 (Vˆ ) (c (Vˆ ), h ),
+
+
+and
+
+pα (Vˆ ) + pt − (wt − c (Vˆ ))
+j
+
+UBMCKP (Vˆ ) := max
+
+
+
+pt−1
+.
+wt−1
+
+UB0 (Vˆ ) is an upper bound obtained when the critical item t (we
+assume t > 1 and t < |Vˆ |) is not part of the solution. UB1 (Vˆ ) is an
+upper bound for the case where it is. The upper bound UBMT (Vˆ )
+can be computed very eﬃciently, in O(|Vˆ | ) time.
+We remark that, while UBL (V̌ ) is deﬁned for a superset of Vˆ
+1
+
+and it retains the integrality of the variables, UBMT (Vˆ ) is deﬁned
+for Vˆ and it considers continuous variables. Therefore, the two
+bounds do not dominate each other.
+
+where h := |P (V̌ )| corresponds to the number of cliques of the
+clique partitioning P (V̌ ) which is uniquely determined by α1 (Vˆ ).
+For this reason UBL2 (Vˆ ) only depends on α1 (Vˆ ) and on c (Vˆ ), similarly to UBL (Vˆ ). An example of the construction of this lookup1
+
+table is given in Section 6. By nature, UBL2 (Vˆ ) considers the internal conﬂicts in each of the cliques which in UBL (Vˆ ) are entirely
+1
+
+ignored. Thus, it is stronger than the latter for any clique partition.
+5.2.2. The new partition-based upper bound
+We introduce a new upper bound based on a procedure to compute a feasible solution to the dual of the LP relaxation of the
+MCKP formulation used in (16), namely:
+
+UBMCKP−LP (Vˆ ) := min
+
+π ,β ≥0
+
+5.2. MCKP-based bounds
+We now introduce a series of upper bounds based on the
+MCKP—to the best of our knowledge, bounds based on such problem have never been adopted in KPC algorithms.
+Let P (Vˆ ) be a clique partition of Vˆ . We consider the MCKP relaxation of the KPC which provides the following upper bound:
+
+(18)
+
+ 
+
+πC + c(Vˆ ) β :
+
+C∈P (Vˆ )
+
+
+πC (i) + wi β ≥ pi , i ∈ Vˆ .
+
+(19)
+
+In it, the dual variables π and β are associated with the primal
+constraints of the MCKP. This dual problem asks for covering the
+weight pi of each item i ∈ Vˆ by either the variable π C(i) associated
+with the unique clique C(i) containing i or by the variable β or
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+441
+
+Fig. 2. Demonstration of our greedy bounding procedure on the example of Fig. 1.
+
+by both. Intuitively, β acts as a “super” clique covering each item
+proportionally to its weight but having an objective function cost
+which, rather than unitary as for the π variables, is equal to the
+capacity c (Vˆ ).
+Algorithms for solving either the dual problem (19) or its primal
+are known in the literature. They rely on the notion of slope. Considering the items in each clique C ∈ P (Vˆ ) ordered by nondecreasing weight and ignoring any dominated items (see Kellerer et al.,
+2004 for further details), a slope is associated with each pair of
+nondominated items j and j − 1 in each clique C and is deﬁned as
+follows:
+
+s j :=
+
+p j − p j−1
+,
+w j − w j−1
+p
+
+with s j = w j if j is the ﬁrst item of the clique.
+j
+
+In what follows, we sketch the algorithm to solve the primal
+problem which has inspired the new bound that we propose in
+this section. The key idea, also see Kellerer et al. (2004), is to start
+with an empty solution and to create, for each clique, a set of
+metaitems, one per slope. These metaitems have as proﬁt the difference of the proﬁts of two consecutive items of a clique, and as
+weight the difference of the corresponding weights. The algorithm
+then follows the standard Dantzig algorithm for the KP problem
+(see Martello & Toth, 1990), inserting these metaitems in the knapsack in order of nonincreasing proﬁt-over-weight ratio and halting when the capacity is fully saturated. The effect of taking a
+metaitem is that, by deﬁnition of its proﬁt and weight, a swap
+is (implicitly) performed in the solution to the original problem
+(deﬁned over items, rather than metaitems), thanks to which the
+j − 1th item is replaced with the jth of the corresponding slope.
+The algorithm runs in O(|Vˆ | log |Vˆ | ), since it requires to sort all the
+items as well as all the slopes.
+Consider now Fig. 2, where we report the slopes associated
+with the clique partition C1 = {1, 2}, C2 = {3, 4}, C3 = {5, 6}, and
+C4 = {7} of the instance reported in Fig. 1. In C1 , there is a unique
+metaitem associated with the slope s1 = 31 (since item 2 is dominated). In C2 , there are two metaitems associated with the slopes
+s3 = 32 and s4 = 43−3
+−2 . In C3 , there are two metaitems associated
+with the slopes s5 = 33 and s6 = 56−3
+−3 . Finally, in C4 there is a single
+metaitem associated with the slope s7 = 45 (which is not depicted
+in Fig. 2 as C4 is a singleton).
+After sorting, the Dantzig algorithm attempts to insert the metaitems in the knapsack in the following order:
+s1 ≺s3 ≺s4 ≺s5 ≺s7 ≺s6 . It halts after examining the metaitem with
+slope s7 , by which the capacity of 8 units is fully saturated, adding
+1
+5 of this metaitem to the solution. It then determines the optimal
+value β ∗ = 45 as the slope associated with the metaitem 7. This
+8
+∗
+leads to the following value of the π variables: πC∗ = 11
+5 , πC = 5 ,
+1
+
+2
+
+πC∗3 = 35 , and πC∗4 = 0. The primal solution is x∗1 = 1, x∗4 = 1, x∗5 = 1,
+
+and x∗7 = 15 , with all the other variables set to 0. The optimal
+solution value is 54
+5 .
+In the literature, algorithms such as Dyer (1984) and Zemel
+(1984) are known for solving the dual (19) in O(|Vˆ | ) by determining the optimal value β ∗ of β (which can be shown to be equal to
+the slope of the metaitem that is taken fractionally by the Dantzig
+algorithm). Such value is then used to compute the optimal values π ∗ of π in closed form. These algorithms, however, can be
+time consuming in practice, especially if used at every node of the
+branch-and-bound tree—see Section 7, where we report the computational results obtained with a version of our algorithm modiﬁed to use the state-of-the-art implementation of the dual algorithm described in Pisinger (1995).
+To reduce the computational effort, we propose a novel greedy
+heuristic which constructs a good-quality dual solution very eﬃciently. The algorithm is inspired by the exact primal algorithm we
+just illustrated but, differently from it, it does not require any sorting nor any preprocessing phase in which dominated items are removed.
+Speciﬁcally, our heuristic computes a (potentially suboptimal)
+value β̄ for β deﬁned as the ratio p j¯/w j¯ of what we call the MCKPcritical item j¯ ∈ Vˆ . This item is obtained as follows. The procedure
+keeps track of a clique proﬁt p̄(C ) for each clique in P (Vˆ ) as well
+as of a total residual capacity w̄. Initially, the clique proﬁts are all
+set to zero and the total residual capacity w̄ is set to c (Vˆ ). Next,
+we iterate over the items in Vˆ according to the order in (1). Let
+j ∈ Vˆ be the current item under consideration, and let C(j) be the
+(unique) clique containing it. If p j ≤ p̄(C ( j ) ), item j is discarded
+and the algorithm proceeds to examine the next item. Otherwise, if
+w j ≤ w̄, the clique proﬁt p̄(C ( j )) is set to pj and the total residual
+capacity w̄ is updated (reduced) as follows:
+
+w̄ := w̄ − p j − p̄(C ( j )
+
+ wj
+pj
+
+.
+
+Note that the reduction corresponds to the fraction of the item
+weight which is necessary to cover the difference in proﬁt between
+pj and p̄(C ( j ) ). If w j > w̄, i.e., if item j exceeds the residual capacity, the algorithm halts and item j becomes the MCKP-critical item.
+Note that such item always exists since, if the MCKP relaxation as
+deﬁned in (16) admits an optimal solution in which the capacity
+is not saturated, we always solve it to optimality in closed form as
+described in Section 5.2.
+Once the value β̄ is computed, in order to obtain a complete
+feasible dual solution, we determine the values π̄ of the π variables as follows:
+
+
+
+π̄C := max 0, max pi − β̄ wi ,
+i∈C
+
+C ∈ P (Vˆ ).
+
+(20)
+
+442
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+This leads us to the following partition-based upper bound:
+
+
+
+UB p (Vˆ ) :=
+
+
+
+
+
+π̄C + β̄ c(Vˆ ) .
+
+(21)
+
+C∈P (Vˆ )
+
+While the computation of this bound requires the same time,
+O(Vˆ ), as the dual algorithms, it is extremely faster in practice and
+it produces very tight upper bounds for the instances we consider
+(see Section 7).
+We now demonstrate the way our new bound (21) is computed
+using the same example depicted in Fig. 1. Initially, the clique profits are set to 0 and the total residual capacity w̄ is set to 8 units.
+The procedure examines the items according to the order in (1), so
+that item 1 is selected ﬁrst, resulting in a clique proﬁt p̄(C1 ) = 3
+and in a reduction of the total residual capacity by w1 , i.e., w̄ =
+8 − 1 = 7. After item 2 is discarded (as its proﬁt is smaller than
+p1 ), the procedure considers item 3, which results in p̄(C2 ) = 3 and
+w̄ = 7 − (3 − −0 ) 23 = 5. The next item to be processed is item 4,
+which results in p̄(C2 ) = 4 and w̄ = 5 − (4 − −3 ) 34 = 17
+4 . Item 5 is
+then added, resulting in p̄(C3 ) = 3 and w̄ = 54 . At this point, the
+total residual capacity is strictly smaller than the weight of item
+6. Thus, item 6 becomes the MCKP critical item with β̄ = 56 and
+3
+1
+π̄C1 = 13
+6 , π̄C2 = 2 , π̄C3 = 2 , and π̄C4 = 0. The resulting bound is
+65
+UB p (Vˆ ) = , which is very close to the optimal solution value 54
+6
+
+5
+
+obtained with the optimal value of β , equal to β ∗ = 45 .
+Fig. 2 illustrates the behavior of our greedy procedure. In the
+part of the ﬁgure that refers to C1 , after items 1 and 2 are considered we can read the values p̄(C1 ) = 3 and w̄ = 1. In the central part of the ﬁgure concerning C2 , we can read the clique proﬁt
+17
+p̄(C2 ) = 4 and infer the total residual capacity w̄ = 7 − 11
+4 = 4
+which is obtained after examining items 3 and 4. Finally, in the
+rightmost part we can see that the capacity is fully saturated after
+97
+taking 34 -th of item 6, which leads to a clique proﬁt of p̄(C3 ) = 24
+.
+Finally, the proﬁt-over-weight ratio of item 6 becomes β̄ .
+6. Outline of the algorithm and demonstration
+In this section, we provide an outline of our new combinatorial branch-and-bound algorithm, which we refer to as CFS (the
+acronym corresponds to the initials of the last names of the three
+authors of this work). This algorithm consists of two phases: (i) a
+preprocessing phase in which we compute an initial feasible solution and we reduce the size of the input graph by pegging some of
+the vertices (see Section 6.1); (ii) a branch-and-bound procedure
+described in the previous sections which ﬁnds an optimal solution
+to the problem (see Section 6.2 for the implementation details).
+6.1. Preprocessing phase and heuristic algorithm
+Before running the branch-and-bound procedure, CFS computes a heuristic solution by resorting to two simple and fast
+heuristics. The ﬁrst one is a greedy heuristic which considers
+the items in nonincreasing order of proﬁt-over-weight ratio and
+adds them to the solution only if they do not conﬂict with the
+previously-added ones and as long as the capacity is not exceeded.
+We run this heuristic n times, forcing, each time, one of the items
+in V to be in the solution and storing the best solution found. The
+second heuristic is a diving heuristic guided by the LP relaxation
+of ILP2 (which can be computed very eﬃciently, see Table 4). Starting from the empty solution, the method iteratively solves the LP
+relaxation and checks whether the ﬁrst (in order of proﬁt-overweight ratio) fractional item can be added to the current solution
+without violating any constraints. If this is the case, the item is
+added to the current solution, whereas, if not, it is forced to be out
+of it. The method stops when no more fractional items are available, thus ﬁnding a feasible heuristic solution.
+
+After the two heuristics have been run, the initial lower bound
+LB is then set to the value of the best solution found by either of
+them. Then, we compute the MCKP-based lookup-table described
+in Section 5.2.1. The corresponding bounds are then used in every
+branch-and-bound node of the tree.
+The algorithm performs then an additional phase with the goal
+of pegging some items, i.e., either eliminating them from the instance or forcing them to be in the solution of the problem. For
+each item i ∈ V, we consider the following ﬁrst pegging condition:
+
+LB ≥ UB(N (i ), c − wi ) + pi ,
+
+(22)
+
+where as upper bound we adopt the one which, among the ones
+we introduced, is the tightest on the problem instance restricted to
+the items in N(i) and to a capacity of c − wi . If the condition is satisﬁed, we drop item i from V since no feasible solutions containing
+it can improve on the incumbent (of value LB). For each item i ∈ V,
+we also consider the following second pegging condition:
+
+LB ≥ UB(V \ {i}, c ),
+
+(23)
+
+where as upper bound we adopt the one which is the tightest on
+the problem instance restricted to the items in Vࢨ{i} and to a capacity of c. If the condition is satisﬁed, we drop item i from V and
+add it to the (partial) root-node solution Iˆ. This is correct since any
+solution which can improve on the incumbent must contain it.
+6.2. Implementation details
+During the exploration of the branching tree, CFS examines the
+vertex set Vˆ induced by the branching operations (see Section 4),
+attempting to prune the corresponding node by relying on the upper bounds proposed in Section 5. More precisely, it ﬁrst computes
+the bound UBL2 (Vˆ ) (18) (which can be read from the MCKP-based
+lookup-table). Next, it computes the bound UBMT (Vˆ ) (15). If both
+bounds are insuﬃcient to prune the node, the PARTITION procedure is called to compute a clique partition of the entire set of vertices Vˆ . Here, PARTITION is run by ignoring the condition on the
+budget, thereby preventing the latter from halting the procedure
+if the introduction of any extra items were to make the budget
+value negative. Finally, we compute the bound UBP (Vˆ ) (21) based
+on the obtained partition.
+If all these attempts fail, we resort to the branching operations described in Section 4.1. Such operations are all based on the
+branching and pruned sets B and P constructed by the PARTITION
+procedure. The nodes of the branch-and-bound tree are explored in
+a depth-ﬁrst fashion. The recursion naturally stops whenever the
+branching set B is empty.
+Finally, let us mention that our implementation relies on a very
+eﬃcient bitstring representation to encode the conﬂict graph G as
+well as the sets of vertices Vˆ and the clique partitions.
+6.3. Demonstration of the branch-and-bound algorithm CFS
+We now illustrate in detail the operations carried out by the
+
+CFS algorithm on the instance of Fig. 1.
+6.3.1. Preprocessing and upper bounds
+The algorithm starts with an initial lower bound LB = 9, which
+corresponds to the feasible solution {1, 3, 5}, of total weight 6. We
+use this solution for illustrative purposes.
+Table 1 reports the KP-based lookup-table that is obtained by
+solving the KP relaxation of the KPC by dynamic programming
+(which is used to compute the bound UBL1 deﬁned in (14) of
+Section 5.1). For each pair (j, s), the table contains the optimal solution value of the KP relaxation restricted to the items in { j, . . . , 7},
+for all values of j = 7, 6, . . . , 1, and to a capacity of s = 0, . . . , c (the
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+443
+
+Table 1
+KP-based lookup-table for the demonstration instance of Fig. 1.
+
+Item 7
+Item 6
+Item 5
+Item 4
+Item 3
+Item 2
+Item 1
+
+s=8
+
+s=7
+
+s=6
+
+s=5
+
+s=4
+
+s=3
+
+s=2
+
+s=1
+
+s=0
+
+4
+5
+7
+8
+10
+10
+12
+
+4
+5
+5
+7
+7
+9
+12
+
+4
+5
+5
+7
+7
+9
+10
+
+4
+4
+4
+4
+7
+7
+9
+
+0
+0
+3
+4
+4
+6
+8
+
+0
+0
+3
+4
+4
+5
+6
+
+0
+0
+0
+0
+3
+3
+5
+
+0
+0
+0
+0
+0
+2
+3
+
+0
+0
+0
+0
+0
+0
+0
+
+Table 2
+MCKP-based lookup-table for the demonstration instance of Fig. 1.
+
+Item 7
+Item 6
+Item 5
+Item 4
+Item 3
+Item 2
+Item 1
+
+s=8
+
+s=7
+
+s=6
+
+s=5
+
+s=4
+
+s=3
+
+s=2
+
+s=1
+
+s=0
+
+4
+5
+7
+8
+8
+9
+10
+
+4
+5
+5
+7
+7
+9
+10
+
+4
+5
+5
+7
+7
+8
+9
+
+4
+4
+4
+4
+6
+6
+7
+
+0
+0
+3
+4
+4
+6
+7
+
+0
+0
+3
+4
+4
+5
+6
+
+0
+0
+0
+0
+3
+3
+3
+
+0
+0
+0
+0
+0
+2
+3
+
+0
+0
+0
+0
+0
+0
+0
+
+Table 3
+Optimal solution values (for each possible value of capacity) of the MCKP relaxation for the clique
+partition P (V̌ ) = {{4}, {5, 6}, {7}} for item 4 and the demonstration instance of Fig. 1.
+
+Clique {4}
+Clique {5, 6}
+Clique {7}
+
+s=8
+
+s=7
+
+s=6
+
+s=5
+
+s=4
+
+s=3
+
+s=2
+
+s=1
+
+s=0
+
+4
+7
+8
+
+4
+7
+7
+
+4
+7
+7
+
+4
+4
+4
+
+4
+4
+4
+
+4
+4
+4
+
+0
+0
+0
+
+0
+0
+0
+
+0
+0
+0
+
+capacity of the instance is 8). Notice that the items are processed
+in reverse order, starting from the last item of index n = 7.
+Table 2 contains the MCKP-based lookup-table that is obtained
+by solving the MCKP relaxation of the KPC by dynamic programming (which, in the algorithm, is used for computing the bound
+UBL2 deﬁned in (18) of Section 5.2.1). Let us consider the clique
+partition
+P (V ) = {C1 = {1, 2}, C2 = {3, 4}, C3 = {5, 6}, C4 = {7}}.
+For each pair (j, s), the table contains the optimal solution values of
+the MCKP relaxation restricted to items in { j, . . . , n}, for all values
+of j = 7, 6, . . . , 1, and to a capacity of s = 0, . . . , c = 8. The rows of
+this lookup table are ﬁlled in sequentially according to Eq. (17) and
+by considering the partition of the vertices in V̌ . In Table 3, we
+show how the row of item 4 in Table 2 is obtained with the partition P (V̌ ) = {{4}, {5, 6}, {7}} from the row of clique {7} of Table 3.
+In Table 3, we report in boldface the bounds which are strictly
+stronger than the bounds showed in Table 1. It is worth noticing
+that the bound UBL2 (V ) is equal to 10 and that it corresponds to
+the optimal KPC solution value.
+During the preprocessing phase, the CFS algorithm eliminates
+item 2 thanks to the ﬁrst pegging condition (22), as LB = 9 ≥
+UBL2 (N (2 )) + p2 = 7 + 2 = 9. Indeed, we have N (2 ) = {3, 5, 6, 7}
+(equal to Vˆ ), c (Vˆ ) = c − w2 = 8 − 1 = 7, and the bound can be read
+
+from the MCKP-based lookup table in row j = 3 (which is the ﬁrst
+element in Vˆ ) and column s = 7. Item 6 is eliminated in a similar
+fashion. None of the other items can be removed by either of the
+pegging conditions (22), (23).
+After the pre-processing phase, Vˆ = V \ {2, 6} and the clique
+partition becomes P (Vˆ ) = {{1}, {3, 4}, {5}, {7}}. As far as UBP (Vˆ ),
+as deﬁned in (21) of Section 5.2.2 is concerned, the value of β̄
+is equal to 45 , which corresponds to the proﬁt-over-weight ratio
+of item 7. Accordingly, the values of the different π variables are
+8
+3
+54
+ˆ
+π̄C1 = 11
+5 , π̄C2 = 5 , π̄C3 = 5 , and π̄C4 = 0. The bound UBP (V ) is 5 .
+After the preprocessing phase, the CFS algorithm starts exploring the nodes of the branch-and-bound tree, which is reported in
+
+Fig. 3. The CFS algorithm explores in a depth-ﬁrst fashion 8 nodes
+in total (including the root node). The incumbent solution Iinc is
+updated only at node 3, where the algorithm ﬁnds the optimal solution {1, 3, 7}. Fig. 3 reports, for each node of the tree, the sets Vˆ
+and Iˆ. If a node is pruned, we report the value of the bound which
+allowed for pruning it, whereas, if pruning did not take place, we
+report the branching and pruned sets B and P. In the following section, we describe in detail the operations performed by the CFS
+algorithm on the different nodes of the branching tree.
+6.3.2. Processing the root node and the ﬁrst node
+At the root node, Iˆ is the empty set and Vˆ corresponds to the
+initial vertex set V minus items 2 and 6, which have been removed by the preprocessing procedure. The attempt to prune the
+node fails since UBL2 (Vˆ ) = 10, UBMT (Vˆ ) = 11, UBP (Vˆ ) = 10, and
+all these upper bounds are greater than LB = 9. Therefore, the
+CFS algorithm starts the branch-and-bound phase by creating the
+branching and pruned sets B and P. The execution of the cliquepartitioning algorithm PARTITION (see Section 4.1) generates two
+cliques, C1 = {7}, C2 = {5}, which lead to P := {5, 7}.
+The clique-partition bound (as deﬁned in (11)) is UBC (P ) =
+πC∗1 + πC∗2 = 3 + 4 = 7 ≤ LB = 9. It is worth noticing that all the
+proﬁts pi corresponding to items not in P are strictly greater than
+the available budget, which is equal to LB − UBC (P ) = 2.
+For this reason, the procedure PARTITION cannot further enlarge the set P and it halts. The initial sets P and B are P = {5, 7}
+and B = {1, 3, 4}. Three nodes are then created by branching on the
+items contained in B.
+First, the algorithm branches on item 1, creating node 1, in
+which the set Vˆ is {3, 4, 5, 7} and the set Iˆ is {1}. The attempt
+to prune the node fails because UBL2 (Vˆ ) = 7, UBMT (Vˆ ) = 8, and
+UB p (Vˆ ) = 7, and they are all greater than LB − p(Iˆ) = 9 − 3 = 6.
+The execution of PARTITION generates the single clique C1 =
+{7}, which leads to the branching and pruned sets P = {7} and B =
+{3, 4, 5} The clique-partition bound is UBC (P ) = πC∗1 = 4 ≤ LB = 9.
+
+444
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+V̂ = V \ {2, 6}
+Iˆ = ∅
+B = {1, 3, 4}
+P = {5, 7}
+ˆ = 0, w(I)
+ˆ =0
+p(I)
+LB = 9, U BC (P ) = 7
+
+Iˆ ∪ 1
+
+Node 1
+
+V̂ = {3, 4, 5, 7}
+Iˆ = {1}
+B = {3, 4, 5}
+P = {7}
+
+Iˆ ∪ 3
+
+Node 6
+
+Iˆ ∪ 4
+
+V̂ = {5, 7}
+Iˆ = {3}
+
+V̂ = {5, 7}
+Iˆ = {4}
+
+U BL2 (V̂ ) = 5
+
+U BL2 (V̂ ) = 4
+
+pruned
+
+pruned
+
+Node 7
+
+ˆ = 3, w(I)
+ˆ =1
+p(I)
+LB = 9, U BC (P ) = 4
+
+Iˆ ∪ 3
+
+Node 2
+
+V̂ = {5, 7}
+Iˆ = {1, 3}
+B = {7}
+P = {5}
+
+Iˆ ∪ 4
+
+V̂ = {5}
+Iˆ = {1, 4}
+U BL2 (V̂ ) = 3
+
+LB = 9, U BC (P ) = 3
+
+Iˆ ∪ 5
+
+Node 5
+
+V̂ = ∅
+Iˆ = {1, 5}
+B=∅
+P =∅
+ˆ = 6, w(I)
+ˆ =4
+p(I)
+
+ˆ = 6, w(I)
+ˆ =3
+p(I)
+
+Iˆ ∪ 7
+
+Node 4
+
+pruned
+
+Node 3
+
+V̂ = ∅
+Iˆ = {1, 3, 7}
+B=∅
+P =∅
+ˆ = 10, w(I)
+ˆ =8
+p(I)
+LB = 10
+Fig. 3. Branch-and-bound tree produced by the CFS algorithm when solving KPC on the instance reported in Fig. 1.
+
+Since we have budget = LB − UBC (P ) − p(Iˆ) = 9 − 4 − 3 = 2 and all
+the proﬁts of the items in B are strictly greater than budget, the
+procedure halts. At this point, branching is carried out on the items
+in B, generating 3 additional child nodes.
+
+In node 5, Vˆ becomes empty since the residual capacity of the
+node c (Vˆ ) is 4, which is greater than the 5 units of weight of item
+7. Accordingly, both the branching and pruned sets become empty.
+As no further nodes are left, the CFS algorithm terminates.
+
+6.3.3. Processing the remaining nodes
+In node 2, the set Vˆ is {5, 7} and the set Iˆ is {1, 3}. According to the mapping of the vertices deﬁned in Section 5.1, we have
+α1 (Vˆ ) = 5, α2 (Vˆ ) = 7. Part (a) of Fig. 4 reports in green the vertices
+in Iˆ and in blue the vertices removed from the instance during the
+pre-processing phase. Part (b) reports in red the vertices of Vˆ . The
+branching set B is the singleton {7}. The pruned set P is the singleton {5}.
+In node 3, the set Vˆ is the empty set and the set Iˆ is {1, 3,
+7}. Therefore, the node corresponds to a leaf of the branch-andbound tree on which no further branching operations take place. In
+this node, both the incumbent solution Iinc and the corresponding
+incumbent solution value LB are updated.
+In nodes 4, 6, and 7, the MCKP-based lookup-table bound is
+strong enough to prune the nodes.
+
+7. Computational experience
+In this section, we present the results of an extensive computational campaign carried out to assess the performance of our new
+branch-and-bound algorithm CFS. Our main goal is threefold:
+(i) comparing CFS to the ILP formulations presented in
+Section 3 (Section 7.1.1)
+(ii) evaluating the strength and the impact of the different
+bounding procedures used by CFS (Sections 7.1.2 and 7.1.3)
+(iii) comparing the performance of CFS to the state-of-the-art
+algorithm from the literature introduced in Bettinelli et al.
+(2017) which, in the following, we refer to as BCM; the implementation of BCM has been kindly provided by the authors of Bettinelli et al. (2017) (Section 7.1.4).
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+445
+
+Fig. 4. (a) Instance graph with the set Iˆ = {1, 3} of node 2 of the branch-and-bound tree (reported in Fig. 3) highlighted in green and the items eliminated during the
+pre-processing phase highlighted in blue. (b) The graph G[Vˆ ] induced by the vertices in the common anti-neighbourhood of the vertices in Iˆ; the vertices in Vˆ = {5, 7} are
+highlighted in red and reindexed from 1 to |Vˆ | = 2. The ﬁgure also reports the mapping for each j ∈ Vˆ to its index α j (Vˆ ) in V, as explained in Section 5.1; dashed lines
+represent edges (conﬂicts) involving vertices not in Vˆ . (For interpretation of the references to color in this ﬁgure legend, the reader is referred to the web version of this
+article.)
+
+The experiments are run on a 20-core Intel(R) Xeon(R) CPU
+E5-2690 v2@3.00 gigahertz, with 128 gigabytes of main memory,
+running a 64-bit Linux operating system. Both CFS and BCM are
+implemented in C++, compiled with gcc 4.8.4 (with the -o3
+optimization setting), and run on a single core. On this machine,
+the performance of the algorithm dfmax, commonly used for comparing the eﬃciency of machines with different hardware, is of
+0.189, 1.155, and 4.369 seconds for the benchmark graphs r300.5,
+r400.5 and r500.5, respectively. Throughout the section, all
+CPU times are reported in seconds. On each instance and each run,
+we adopt a time limit of 600 seconds. The ILP formulations are
+solved using the state-of-the art commercial MILP solver CPLEX,
+version 12.8.0 (called just CPLEX in what follows), run in singlethreaded mode, leaving all its parameters to their default value.
+As main testbed for our experiments, we consider the instances
+tested in Bettinelli et al. (2017), which feature conﬂict graphs with
+nine values of density, ranging from 0.1 to 0.9. The same set of
+instances has been considered in other works, including Elhedhli
+et al. (2011), Muritiba et al. (2010), and Sadykov and Vanderbeck
+(2013). In particular, all these instances were obtained starting
+from the Bin Packing Problem instances proposed in Falkenauer
+(1996). We refer to this testbed as the main testbed (results are
+reported in Section 7.1).
+Along the lines of Bettinelli et al. (2017), we also consider
+a second testbed containing instances on which BCM, which is
+a combinatorial branch-and-bound algorithm, is outperformed by
+the branch-and-cut algorithm based on mathematical programming techniques implemented in CPLEX. Similarly to BCM, CFS is
+not as eﬃcient as CPLEX on these instances (while still resulting
+more eﬃcient than BCM). We report on the experiments on those
+instances in Section 7.2. We refer to this testbed as the very sparse
+testbed.
+7.1. Results on the main testbed
+The main testbed features instances belonging to one of eight
+types and to one of two classes. Each of them is obtained adopting one of four capacity multipliers. The type speciﬁes the number
+of items and their weight structure, the class speciﬁes the proﬁt
+structure, and the capacity multiplier speciﬁes the value by which
+the capacity is scaled. In all instances of type one to four, the items
+have weights uniformly distributed in [20, 100] and the (unscaled)
+knapsack capacity c is equal to 150. In them, the number of items
+n (equal to the number of vertices of the conﬂict graph |V|) is 120,
+
+250, 50 0, and 1,0 0 0, respectively. Instances of types ﬁve to eight
+feature items with weights uniformly distributed in [250, 500] and
+c equal to 1,0 0 0. For these instances, the number of items n is
+60, 120, 349, and 501, and each triplet of items forms an exact
+packing (i.e., it perfectly ﬁts the knapsack, saturating its capacity).
+The two classes specify the way the item proﬁts are determined.
+The instances of the ﬁrst class, the random class, which we identify by the letter “R”, feature items with random proﬁts uniformly
+distributed in [1, 100]. The instances of the second class, the correlated class, which we identify by the letter “C”, feature items with
+correlated proﬁts equal to pi = wi + 10, i = 1, . . . , n. As to the capacity multiplier, according to Bettinelli et al. (2017) we consider
+instances with: (i) the original capacity (150 or 1,0 0 0, based on the
+instance type) (ii) three times the original capacity, and (iii) ten
+times the original capacity. Since high values of the knapsack capacity c tend to make the instances harder to solve, in this work
+we also consider a fourth setting leading to more challenging instances: (iv) ﬁfteen times the original capacity. When referring to
+an instance in the main testbed, the natural number that follows
+the letter C or R identiﬁes the multiplier adopted for the knapsack
+capacity. For each choice of type, class, and multiplier, the testbed
+contains 90 instances (10 instances for each of the 9 density values
+of the conﬂict graph), comprising, overall, 5760 instances.
+7.1.1. Performance of the ILP formulations
+First, we experiment with the three ILP formulations ILP1 , ILP2 ,
+and ILP3 , which we presented in Section 3, and assess the strength
+of their LP relaxations, which we denote by LP1 , LP2 , and LP3 . As
+mentioned in Section 3, for the construction of the clique collection C˜(V ) for ILP3 we adopt the procedure proposed in Bettinelli
+et al. (2017). For this experiment, we consider a subset of instances
+of the main testbed of class C, capacity multipliers 1, 3, and 10, and
+one instance for all eight types and nine densities. The subset contains a total of 216 instances.
+When comparing the three ILP formulations by solving them
+with CPLEX, we observe that CPLEX manages to solve 168 instances with ILP1 (77%), 175 with ILP2 (81%), and 157 with ILP3
+(72%). The results are better summarized in the performance proﬁle in Fig. 5, which provides a graphical representation of the relative performance of CPLEX with the three formulations. For each
+instance, we compute the normalized time τ as the ratio of the
+computing time of the considered algorithm (which is ∞ if the
+instance is not solved to optimality) over the minimum computing time taken by all the algorithms we tested. For each value of
+
+446
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+Fig. 5. Performance proﬁle comparing the three ILP formulations ILP1 , ILP2 , and ILP3
+on a subset of instances of the main testbed.
+Table 4
+Performance of the upper bounds provided by LP1 , LP2 , LP3 (subset of instances).
+Class/mult
+
+Dens
+
+LP1
+
+LP2
+
+LP3
+
+Time
+
+LP gap
+
+Time
+
+LP gap
+
+Time
+
+LP gap
+
+C1
+
+0.1
+0.3
+0.6
+0.9
+
+0.11
+0.30
+1.01
+1.38
+
+0.73
+1.62
+3.26
+10.31
+
+0.00
+0.01
+0.01
+0.02
+
+0.82
+2.14
+3.84
+10.97
+
+1.04
+3.75
+6.22
+4.75
+
+0.73
+1.55
+1.68
+5.63
+
+C3
+
+0.1
+0.3
+0.6
+0.9
+
+0.11
+0.27
+1.05
+1.36
+
+0.64
+3.75
+14.70
+59.66
+
+0.00
+0.01
+0.01
+0.02
+
+1.54
+5.04
+16.12
+61.48
+
+0.99
+3.63
+6.67
+5.11
+
+0.57
+1.99
+9.75
+45.81
+
+C10
+
+0.1
+0.3
+0.6
+0.9
+
+0.10
+0.28
+0.83
+1.22
+
+5.69
+52.87
+192.52
+417.94
+
+0.00
+0.01
+0.02
+0.03
+
+7.22
+54.81
+196.00
+424.42
+
+0.99
+3.59
+5.98
+4.77
+
+2.09
+29.87
+113.68
+234.97
+
+τ on the horizontal axis, the vertical axis reports the percentage
+of instances for which the corresponding algorithm spent at most
+τ times the computing time of the fastest algorithm. At τ = 0, the
+value of the curves is equal to the percentage of instances in which
+the corresponding algorithm has proven to be the fastest. At the
+right end of the chart (for τ approaching ∞), each curve corresponds to the percentage of instances solved by a speciﬁc algorithm. The best performance is achieved by the algorithm whose
+curves occupy the upper part of the chart. The ﬁgure conﬁrms that
+the best performance is obtained with ILP2 .
+To better understand why ILP2 outperforms the other two formulations, we have assessed the strength of the three corresponding LP relaxations. Table 4 reports the computing time needed to
+solve each of them, aggregating the instances by class, capacity
+multiplier, and density. Average results over eight instances are
+reported for each combination of the three. As the table shows,
+the optimality gaps obtained with the three LP relaxations become
+very large for larger values of the capacity multiplier as well as for
+larger values of the graph density.
+It is worth mentioning that these gaps, as well as all the gaps
+reported in the following sections, are computed, for each instance,
+as the percentage difference between the value of the upper bound
+and the optimal solution value. In order to be able to fairly compare the gaps, we use as denominator the optimal solution value
+of the instance. In case an instance is not solved to optimality, the
+gap is computed by resorting, rather than to the optimal solution
+value, to the best solution value found by any of the algorithms
+presented in this work.
+By looking at Table 4, on, for instance, the C instances with density equal to 0.6 and a capacity multiplier ranging from 1 to 10,
+the average gaps range from 3.26% to 192.52% for LP1 , from 3.84%
+
+to 196.00% for LP2 , and from 1.68% to 113.68% for LP3 . Similarly, on
+the C instances with capacity multiplier equal to 10 and for densities ranging from 0.1 to 0.9, the average gaps range from 5.69% to
+417.94% for LP1 , from 7.22% to 424.42% for LP2 , and from 2.09% to
+234.97% for LP3 .
+When comparing the average strength of the three bounds and
+the corresponding average gaps over all instances used in this experiment, the table shows that the gaps obtained with LP1 (63.6%
+on average) are smaller than those obtained with LP2 (65.4% on
+average), although not by a large margin. Moreover, it shows that
+this small improvement comes at a computing time of, on some
+instances, about two orders of magnitude larger, with an average
+of 0.7 seconds with LP1 and one of 0.01 seconds with LP2 . The
+gaps obtained with LP3 are smaller (37.36% on average) than either of those obtained with LP1 and LP2 but, unfortunately, solving
+LP3 can be extremely time consuming (up to about three and a half
+orders of magnitude more), with an average computing time of 3.9
+seconds.
+For these reasons, we will adopt LP2 as the baseline for assessing, in the next set of experiments, the strength of the bounds we
+introduced in Section 5 for our algorithm CFS.
+7.1.2. Assessing the strength of the upper bounds adopted in CFS
+We now assess the strength of the different bounds we introduced in Section 5, aiming at understanding which ones are better suited for their adoption in our algorithm CFS. For this experiment, we take into account a subset of instances of the main
+testbed of both classes C and R, of types 1, 4, 5, and 8, and with
+capacity multiplier of value 1 and 15.
+Using the LP relaxation LP2 as baseline, we compare the tightness of two KP-based upper bounds, i.e., the Martello–Toth bound
+UBMT (15) and the KP-based lookup-table bound UBL1 (14), and of
+four MCKP-based upper bounds, i.e., the MCKP-based lookup-table
+bound UBL2 (18), the partition-based bound UBP (21), the bound
+obtained by solving to optimality the LP relaxation of the MCKP
+relaxation of the KPC (18), which we refer to here as UBP˜ , and the
+bound obtained by solving to optimality the unrestricted (i.e., with
+integer variables) version of the MCKP relaxation of the KPC (16),
+which we refer to here as UBP∗ . The latter two are computed via
+the MCKNAP.c code developed by Pissinger, which is available online at the address hjemmesider.diku.dk/~pisinger/codes.html.
+It is important to mention that, while U BMT , U BL1 , U BL2 , and
+UBL2 can all be computed in a negligible amount of computing
+time, U BP˜ and U BP∗ requiring a higher computational effort. Since
+in CFS these bounds are employed as a pruning mechanism at
+each node of the branch-and-bound tree, in order to obtain an efﬁcient algorithm it is crucial that the time spent to compute the
+bounds is extremely small.
+We measure the quality of the upper bound in Tables 5 and 6.
+The results are reported aggregated by class, capacity multiplier,
+and type in Table 5, and by class, capacity multiplier, and density
+in Table 6. For each combination of these, we report the average
+results obtained over nine instances (one per value of density) in
+Table 5, and over eight instances (one per type) in Table 6.
+As to the KP-based bounds, the tables show that UBMT is often
+close to LP2 when the capacity multiplier is equal to 1, whereas
+UBMT becomes substantially worse than LP2 when the capacity
+multiplier is equal to 15 (on, in particular, instances of type 1, 4,
+and 5). UBL1 is, by construction, at least as tight as UBMT and, as
+the table shows, their difference, while observable for low-capacity
+instances with a multiplier of 1 and a large density, is not too
+pronounced. UBL1 turns out to be stronger than LP2 on instances
+with a small capacity multiplier and, in particular, a low density.
+As to the MCKP-based bounds, the tables show that these are always tighter than the KP-based ones (UBL2 is, by construction, at
+least as tight as UBL1 ), and that they are much stronger than LP2 .
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+447
+
+Table 5
+Gap of the upper bounds on C and R instances grouped by class (subset of instances).
+Class/mult
+
+Type
+
+LP2
+
+KP-based upper bound
+
+MCKP-based upper bounds
+
+UBMT
+
+UBL1
+
+UBL2
+
+UBP
+
+UBP˜
+
+UBP∗
+
+C1
+
+1
+4
+5
+8
+
+9.3
+5.8
+1.0
+0.5
+
+9.5
+5.8
+1.0
+0.5
+
+7.0
+3.5
+0.2
+0.5
+
+2.8
+2.9
+0.2
+0.1
+
+5.3
+4.6
+1.0
+0.4
+
+5.1
+4.6
+1.0
+0.4
+
+2.8
+2.9
+0.2
+0.1
+
+C15
+
+1
+4
+5
+8
+
+508.6
+1596.3
+297.4
+252.2
+
+1111.6
+1647.4
+496.8
+252.2
+
+1111.6
+1646.9
+496.6
+252.1
+
+114.4
+549.3
+71.8
+191.4
+
+161.6
+705.5
+93.2
+215.7
+
+161.6
+702.3
+93.2
+215.5
+
+161.6
+702.2
+93.2
+215.5
+
+R1
+
+1
+4
+5
+8
+
+34.0
+27.2
+27.3
+26.6
+
+34.7
+27.3
+27.5
+26.6
+
+31.2
+25.9
+7.1
+5.3
+
+12.0
+14.1
+5.3
+3.7
+
+15.0
+15.4
+19.2
+24.4
+
+14.9
+15.3
+19.2
+24.4
+
+12.0
+14.1
+5.4
+3.7
+
+R15
+
+1
+4
+5
+8
+
+457.6
+2260.4
+256.4
+487.6
+
+937.4
+2592.0
+519.5
+495.7
+
+937.4
+2592.0
+518.6
+495.4
+
+121.6
+579.0
+65.3
+231.7
+
+121.6
+579.0
+65.3
+231.8
+
+121.6
+579.0
+65.3
+231.8
+
+121.6
+579.0
+65.3
+231.7
+
+Table 6
+Gap of the upper bounds on C and R instances grouped by density (subset of instances).
+Class/mult
+
+Dens
+
+LP2
+
+KP-based upper bounds
+
+MCKP-based upper bounds
+
+UBMT
+
+UBL1
+
+UBL2
+
+UBP
+
+UBP˜
+
+UBP∗
+
+C1
+
+0.1
+0.3
+0.6
+0.9
+
+1.2
+1.9
+4.3
+10.1
+
+1.3
+2.0
+4.3
+10.2
+
+0.2
+0.9
+3.2
+9.0
+
+0.0
+0.3
+1.7
+4.6
+
+1.1
+1.4
+3.0
+6.5
+
+1.1
+1.4
+3.0
+6.3
+
+0.0
+0.3
+1.7
+4.6
+
+C15
+
+0.1
+0.3
+0.6
+0.9
+
+112.8
+374.8
+810.8
+1711.8
+
+174.7
+510.7
+1078.0
+2224.6
+
+174.7
+510.6
+1077.8
+2224.1
+
+91.5
+218.0
+270.7
+180.9
+
+103.1
+268.1
+349.0
+264.6
+
+103.1
+265.2
+348.9
+264.6
+
+103.1
+265.2
+348.9
+264.6
+
+R1
+
+0.1
+0.3
+0.6
+0.9
+
+13.5
+16.9
+29.3
+64.6
+
+13.6
+17.0
+29.5
+64.8
+
+2.1
+5.4
+17.1
+51.2
+
+0.8
+2.2
+8.5
+25.5
+
+12.2
+12.9
+19.1
+33.3
+
+12.2
+12.9
+19.1
+33.1
+
+0.8
+2.2
+8.5
+25.5
+
+R15
+
+0.1
+0.3
+0.6
+0.9
+
+143.5
+422.5
+919.9
+1948.9
+
+231.9
+614.8
+1294.8
+2696.2
+
+231.8
+614.6
+1294.4
+2695.6
+
+110.8
+227.0
+285.7
+195.7
+
+110.8
+227.1
+285.7
+195.7
+
+110.8
+227.1
+285.7
+195.7
+
+110.8
+227.0
+285.7
+195.7
+
+When comparing them, we observe that the MCKP-based lookuptable bound provided by UBL2 may differ from the optimal solution value of the MCKP relaxation UBP∗ by being (see the C15 instances) tighter than it. This is because, in our implementation,
+UBL2 is enhanced by considering a second clique partition which
+is constructed by taking the vertices (items) into account greedily according to a non-decreasing proﬁt-over-weight ratio, i.e., in
+reversed order w.r.t. the order introduced in (1). The MCKP-based
+lookup-table bound which we report in Tables 5 and 6 (which is
+used in CFS) is deﬁned as the best among the values provided by
+both partitions. It follows that UBL2 is at least as tight as UBP∗ , as
+the latter only considers one of such two partitions.
+We conclude this set of experiments with Table 7, which compares the results obtained with CFS to those obtained with a
+modiﬁed version of the algorithm which employs as MCKP-based
+bound either UBP˜ or UBP∗ , rather than UBP . In this table (as well
+as in the other ones in the remainder of the paper), the number
+of steps reported for CFS refers to the number of calls to the recursive procedure. It is worth noting that the recursion is implemented with a lookahead of one step thanks to which the leaf
+nodes of the branch-and-bound tree do not count as steps. A similar implementation is described in San Segundo, Coniglio et al.
+(2019).
+
+The table shows that, while the adoption of these two tighter
+MCKP bounds reduces, in general, the number of steps (for, in particular, low-density instances), this reduction comes at a high computational cost which, ultimately, results in a smaller amount of
+instances being solved within the time limit. This set of experiments suggests the adoption of UBMT , UBL2 and UBP in CFS, as they
+achieve a good trade-off between strength and computational burden, thus allowing, as we will better show in the remainder of the
+section, for an effective algorithm for solving the KPC.
+7.1.3. Assessing the impact of the different components of our
+branch-and-bound algorithm
+Based on the experimental analysis we illustrated before, our
+implementation of CFS relies on three upper bounds: UBMT , UBL2
+and UBP . We now report the results of an experiment carried out
+to assess the impact on the overall performance of CFS of each
+of these three bounds. We experiment with four variants of CFS
+which employ either only two of the three bounds or none of
+them. The variants are:
+•
+
+CFS no UBMT , obtained by removing the bounding procedure
+
+•
+
+based on UBMT
+CFS no UBL2 , obtained by removing the bounding procedure
+based on UBL2
+
+448
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+Table 7
+Comparison on a subset of instances of the main testbed between CFS and a version of CFS which, as MCKP-based bound,
+employs either UBP˜ or UBP∗ .
+Class/mult
+
+Dens
+
+CFS with UBP˜
+
+CFS
+
+CFS with UBP
+
+∗
+
+Time
+
+Solved
+
+Steps
+
+Time
+
+Solved
+
+Steps
+
+Time
+
+Solved
+
+Steps
+
+C10
+
+0.1
+0.2
+0.3
+0.4
+0.5
+
+41.4
+79.0
+1.6
+11.5
+28.8
+
+47
+50
+50
+70
+80
+
+1,771,531
+12,464,774
+377,895
+1,862,474
+3,010,873
+
+67.1
+160.1
+2.3
+13.9
+33.6
+
+43
+45
+50
+70
+80
+
+762,894
+8,795,802
+377,895
+1,862,474
+3,010,873
+
+108.0
+0.4
+3.4
+17.7
+39.6
+
+46
+30
+50
+70
+80
+
+81,694
+44,285
+377,895
+1,862,474
+3,010,873
+
+R10
+
+0.1
+0.2
+0.3
+0.4
+0.5
+
+11.2
+47.9
+42.8
+2.0
+7.2
+
+71
+59
+70
+70
+80
+
+103,812
+1,662,823
+2,245,549
+150,268
+330,597
+
+11.9
+35.5
+107.7
+3.1
+10.2
+
+70
+52
+68
+70
+80
+
+58,989
+465,522
+1,971,012
+149,961
+330,037
+
+16.5
+18.3
+70.4
+3.4
+11.0
+
+70
+50
+61
+70
+80
+
+51,711
+294,554
+1,348,133
+149,465
+329,239
+
+variants of the algorithm can be extremely large, up to many orders of magnitude. As an example, we observe that CFS manages to solve the R3 instances with density 0.2 in less than a second performing less than 200 steps. This is in contrast with CFS
+basic, which, for their solution, requires more than a minute and
+more than 100 million steps on average. Over the whole subset of
+instances, the table suggests that the difference between the two
+variants of the algorithm is particularly large on medium-capacity
+instances with a capacity multiplier equal to 3 regardless of their
+class and of their density. This further conﬁrms that the impact of
+the bounding procedures on the performance of CFS is substantial.
+
+Fig. 6. Performance proﬁle showing the impact of the three bounding procedures
+UBMT , UBL2 , and UBP on the performance of the CFS algorithm on a subset of instances taken from the main testbed. The proﬁle is truncated at one order of magnitude (τ = 10).
+
+•
+
+CFS no UBP , obtained by removing the bounding procedure
+
+•
+
+based on UBP
+CFS basic, obtained by removing all three bounding procedures.
+
+For this experiment, we consider 240 instances taken from the
+main testbed, of class C and R, capacity multiplier of value 1, 3,
+and 10, all 8 types, and density up to 0.5.
+By just looking at the number of instances solved within the
+time limit, we observe that both CFS and CFS no UBMT solve
+99 instances out of 114 (86.8%), that both CFS no UBL2 and CFS
+no UBP solve 96 (84.2%), and that CFS basic only manages
+to solve 66 (57.9%). This shows that at least one of the three
+bounding procedures is needed for the computational eﬃciency
+of CFS. Those numbers may seem to indicate that the beneﬁts of
+adopting all three bounds rather than just two of them are not too
+pronounced. This is not the case, though, as one can see from the
+results summarized in the performance proﬁle reported in Fig. 6,
+which considers the instances on which CFS basic takes at
+least 0.01 seconds to ﬁnd an optimal solution. Besides conﬁrming
+that the performance of the CFS algorithm completely deteriorates when (in CFS basic) all three bounding procedures are
+dropped, it shows that even removing any of the three also leads
+to a substantial deterioration of the performance of the algorithm.
+A more detailed comparison between CFS and CFS basic is
+reported in Table 8, where the instances are aggregated by class,
+capacity multiplier, and density (up to 0.5). For each combination
+of the three, the table reports the average over 8 instances. The
+table shows that the difference in performance between the two
+
+7.1.4. Comparison with BCM
+In this section, we compare our algorithm CFS to the state-ofthe-art algorithm BCM proposed in Bettinelli et al. (2017), as well
+as to the ILP formulation ILP2 (solved with CPLEX). As observed
+before, on the main testbed the latter is the better-performing formulation among the three ILP formulations.
+The results are summarized in the performance proﬁles reported in Fig. 7. Besides showing that, on the main testbed, the
+ILP2 formulation yields the worst performance among the three
+solution methods, the two proﬁles clearly show that the CFS algorithm substantially outperforms BCM. As an example, allowing for
+one order of magnitude more the time taken by CFS, BCM manages to solve no more than 40% of the instances, whereas ILP2 only
+solves less than 10% of them on both classes C and R. Allowing for
+two more orders of magnitude the time taken by CFS, BCM reaches
+a plateau, still solving less than 90% of the instances, whereas ILP2
+only solves less than 20% of them. While the performance of BCM
+does not improve even if more time is allocated to it, the performance of ILP2 does improve, but very modestly. Indeed, allowing
+for a time three orders of magnitude larger, with ILP2 only about
+40% of the instances can be solved.
+A further summary of the results is reported in Table 9, indicating the total number of instances solved to optimality by each
+of the three methods within the time limit for different combinations of class and capacity multiplier. In total, CFS manages to
+solve 5389 instances out of 5760, whereas BCM successfully solves
+only 5201 instances (188 less than CFS), and CPLEX with ILP2 only
+4569 (820 less than CFS). More detailed results, reporting number
+of instances solved, computing time, and steps/number of nodes
+can be found in the appendix in Tables 11 and 12. Focusing on CFS
+and BCM (as CPLEX with ILP2 is substantially outperformed by the
+other two algorithms in terms of number of instances solved and
+average computing times), we observe that CFS substantially outperforms BCM. When looking at individual groups of instances such
+as, e.g., the C15 instances of type 1 and 5, CFS is, on average, faster
+than BCM by more than 2 orders of magnitude. For groups of in-
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+449
+
+Table 8
+Performance of CFS when compared to CFS basic (subset of instances).
+Class/mult
+
+Dens
+
+CFS
+
+CFS basic
+
+Solved
+
+Time
+
+Steps
+
+Solved
+
+Time
+
+Steps
+
+C1
+
+0.1
+0.2
+0.3
+0.4
+0.5
+
+8
+8
+8
+8
+8
+
+0.0
+0.0
+0.0
+0.0
+0.0
+
+1
+4
+4
+6
+10
+
+8
+8
+8
+8
+8
+
+0.0
+0.0
+0.0
+0.0
+0.0
+
+83
+1477
+1262
+1134
+1132
+
+C3
+
+0.1
+0.2
+0.3
+0.4
+0.5
+
+8
+8
+8
+8
+8
+
+0.0
+0.0
+0.5
+0.6
+0.9
+
+234
+3731
+16,682
+19,372
+63,543
+
+5
+3
+5
+5
+7
+
+108.9
+61.1
+0.5
+5.2
+13.2
+
+434,261,687
+171,596,377
+2,028,623
+17,704,019
+30,227,171
+
+C10
+
+0.1
+0.2
+0.3
+0.4
+0.5
+
+5
+5
+5
+7
+8
+
+41.5
+97.2
+1.7
+12.7
+29.3
+
+2,079,125
+15,589,771
+422,801
+2,128,162
+3,079,190
+
+2
+4
+5
+7
+8
+
+30.4
+33.5
+1.1
+8.7
+19.7
+
+61,662,582
+12,152,384
+461,864
+2,271,613
+3,338,595
+
+R1
+
+0.1
+0.2
+0.3
+0.4
+0.5
+
+8
+8
+8
+8
+8
+
+0.0
+0.0
+0.0
+0.0
+0.0
+
+7
+6
+9
+12
+11
+
+8
+8
+8
+8
+8
+
+0.0
+0.0
+0.0
+0.0
+0.0
+
+362
+45
+598
+256
+227
+
+R3
+
+0.1
+0.2
+0.3
+0.4
+0.5
+
+8
+8
+8
+8
+8
+
+0.0
+0.0
+0.0
+0.0
+0.0
+
+102
+185
+657
+400
+1096
+
+4
+6
+6
+7
+8
+
+0.8
+63.1
+2.7
+6.2
+18.4
+
+2,189,786
+102,960,668
+3,385,209
+2,545,807
+3,832,851
+
+R10
+
+0.1
+0.2
+0.3
+0.4
+0.5
+
+7
+6
+7
+7
+8
+
+3.1
+48.3
+42.5
+2.0
+8.2
+
+64,813
+1,804,824
+2,226,578
+155,378
+391,182
+
+3
+5
+7
+7
+8
+
+0.6
+9.7
+83.0
+2.6
+9.5
+
+470,881
+3,496,101
+16,191,876
+584,678
+1,370,445
+
+Fig. 7. Performance proﬁle comparing CFS to BCM and ILP2 on the whole main testbed, with instances of class C on the left and instances of class R on the right.
+
+stances in which the two algorithms solve the same number, CFS
+always turn out to be faster, not only on average, but even on each
+individual instance.
+7.2. Result on the very sparse testbed
+We conclude this section by presenting computational results
+on the very sparse testbed. This set contains instances with
+very sparse conﬂict graphs on which BCM (which is a purely
+combinatorial branch-and-bound algorithm) is outperformed by a
+branch-and-cut algorithms based on mathematical programming,
+see Bettinelli et al. (2017). This set was generated along the lines of
+the sparser instances used in Hiﬁ and Michrafy (2007) and Yamada
+et al. (2002). They comprise graphs with densities equal to 0.001,
+
+0.0 02, 0.0 05, 0.01, 0.02 and 0.05, a capacity of 10 0 0 and 20 0 0,
+and sets of 500 and 10 0 0 items, for a total of 24 groups of instances. The weights are sampled uniformly at random from the
+interval [1, 100]. Each group contains 10 random instances (class
+R) and 10 correlated instances (class C). For class R instances, the
+proﬁts are randomly drawn. For class C instances, they are deﬁned as p j = w j + 10, i ∈ N. Overall, this dataset comprises 480
+instances.
+Thanks to extensive preliminary computational results, when
+comparing the performance of CPLEX with the three ILP formulations ILP1 , ILP2 , and ILP3 , formulation ILP1 turns out to achieve
+the best performance on these instances. The performance of ILP3
+is, while worse, almost comparable to that of ILP1 . Differently, ILP2
+is completely outperformed by the other two. In light of this, we
+
+450
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+Table 9
+Summary of the results obtained on all the instances in the main testbed. The results for the algorithm that solved more instances are reported in boldface.
+Class/Mult
+
+CFS
+
+BCM (Bettinelli
+
+ILP2
+
+Solved
+
+et al., 2017)
+Solved
+
+Solved
+
+C1
+C3
+C10
+C15
+
+720
+720
+617
+600
+
+720
+720
+552
+550
+
+720
+584
+446
+428
+
+Total on C instances (out
+of 2880 instances)
+R1
+R3
+R10
+R15
+
+2657
+
+2542
+
+2178
+
+720
+720
+670
+622
+
+720
+720
+630
+590
+
+720
+680
+508
+483
+
+Total on R instances (out
+of 2880 instances)
+
+2732
+
+2660
+
+2391
+
+Grand total (out of 5760
+instances)
+
+5389
+
+5201
+
+4569
+
+Table 10
+Summary of the results obtained on all the instances in the very sparse testbed.
+The results for the algorithm that solved more instances are reported in boldface.
+Class/Capacity
+
+CFS
+
+BCM (Bettinelli
+
+ILP1
+Solved
+
+Solved
+
+et al., 2017)
+Solved
+
+C1000
+C2000
+
+88
+68
+
+65
+44
+
+107
+93
+
+Total on C instances (out
+of 240 instances)
+R1000
+R2000
+
+156
+
+109
+
+200
+
+103
+73
+
+92
+62
+
+119
+110
+
+Total on R instances (out
+of 240 instances)
+
+176
+
+154
+
+229
+
+Grand total (out of 480
+instances)
+
+332
+
+263
+
+429
+
+will now compare, on this testbed, CFS and BCM to ILP1 . The results are summarized in Table 10, while more details can be found
+in Tables 13 and 14 in the appendix.
+The results show that CPLEX with ILP1 manages to solve the
+largest number of instances, 429 (89%), whereas BCM only solves
+263 instances (54%), which is consistent with the results reported
+in Bettinelli et al. (2017). Interestingly, while not as eﬃcient as
+CPLEX with ILP1 on this testbed, CFS manages to solve 332 instances (69%), i.e., 69 more instances than BCM. Moreover, for instances with density up to 0.005, the performance of CFS is comparable to the performance of CPLEX with ILP1 and substantially
+better than that of BCM. When considering all the instances with
+density up to 0.005 (240 in total), CPLEX with ILP1 manages to
+solve all of them. CFS manages to solve all of them but four,
+whereas BCM fails to solve 29 of them.
+One of the main reasons behind the very good performance
+of CPLEX with ILP1 is that the LP relaxation of ILP1 provides a
+very strong upper bound when the conﬂict graph is very sparse.
+Indeed, the LP-relaxation gap of ILP1 , ILP2 , and ILP3 is typically
+much tighter on the sparse instances than the gap we measured
+on the main testbed. On average, it is equal to, respectively, 2.8%,
+10.8%, and 1.6%. The average computing times are 0.05 seconds
+for ILP1 , negligible for ILP2 , and 0.18 seconds for ILP3 . We remark
+that our algorithm heavily relies on the conﬂict graph for reducing the search space after each branching operation. When the
+graph is extremely sparse, such reduction is often very modest.
+Moreover, the bounds offered by the bounding procedures that
+
+we use, i.e., U BMT , U BL2 , and UBP , are weaker than the three LPrelaxation bounds, being equal, on average, to 15.8%, 5.4%, 5.6%, respectively. It is worth noticing that, when the conﬂict graph is very
+sparse, the clique partition adopted in the MCKP-based bounds is
+very likely to contain very small cliques, thus only capturing a
+fraction of the conﬂicts in the graph (only those among items in
+the same cliques), resulting in a weak bound. For these reasons,
+sparse graphs with densities between 0.01 and 0.05 are not suitable for being solved with our purely combinatorial branch-andbound algorithm CFS. On the contrary, when the conﬂict graph is
+extremely sparse, with densities up to 0.005, the conﬂicts are almost irrelevant and the KP-based bounds are suﬃciently strong,
+which allows CFS to achieve a performance comparable to that of
+CPLEX with ILP1 .
+7.3. Experiments with a hybrid algorithm
+Table 10 shows that CPLEX with ILP1 is very effective on the
+very sparse testbed. For this reason, we have developed a hybrid
+algorithm, which we refer to as CFS+LP, that combines CFS with
+the LP-based upper bound that is computed by CPLEX within its
+branch-and-cut tree. In this algorithm, we employ the LP relaxation
+of ILP1 (solved on the graph induced by the vertex set Vˆ ) to prune
+the branch-and-bound nodes that are generated within CFS. This
+additional pruning procedure is called only if pruning fails with
+each of the upper bounds adopted in CFS.
+On the very sparse random instances, we observe that CFS+LP
+outperforms CFS, managing to solve 209 instances as opposed
+to 176. Differently, on the very sparse correlated instances CFS
+achieves a better performance, as CFS+LP only solves 145 instances, whereas CFS solves 156. Our experiments reveal that, on
+the very sparse random instances, the LP-based bound is successful in pruning a node in 74% of the cases in which it is called.
+Differently, on the very sparse correlated instances, this happens
+in only 5.9% of the cases. This shows that, on the latter instances,
+computing this LP-based upper bound almost always results in
+an overhead. Empirically, the pruning capability of such an upper bound is indeed very limited. This results in an increase in
+the computing time for processing each branch-and-bound node,
+which, ultimately, leads to solving fewer instances to optimality
+within the time limit. We remark that the bound provided by
+the LP relaxation is not the only strength of CPLEX, as many
+other of its features, such as preprocessing, cutting plane generation, and primal heuristics are all necessary for the effectiveness
+of CPLEX’s branch-and-cut algorithm for this set of very sparse instances.
+In order to assess if, thanks to the hybridization, CFS+LP can
+lead to an improvement beyond the very sparse testbed, we also
+test it on the denser subset of 240 instances taken from the main
+testbed considered in Section 7.1.3 and Table 8, with densities
+ranging from 0.1 to 0.5. On these instances, our tests show that
+CFS remains the better-performing algorithm, as it outperforms
+CFS+LP. Indeed, CFS manages to solve 225 out of 240 instances,
+as opposed to CFS+LP, which manages to solve to proven optimality only 209 of them. This result is in accordance with what
+we observed on the correlated instances in the very sparse testbed.
+In particular, it shows that the branch-and-bound algorithm, CFS,
+proposed in this paper—which, due to being purely combinatorial,
+does not rely on bounds based on mathematical programming—is
+the best choice for instances with densities greater than or equal
+to 0.1.
+8. Conclusions
+In this paper, we have addressed the Knapsack Problem with
+Conﬂicts (KPC), which is an important generalization of the clas-
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+sical Knapsack Problem to the case with conﬂicts between pairs
+of items. The KPC is particularly relevant as it often appears as
+a subproblem when solving other well-known combinatorial optimization problems with methods based on column generation,
+such as, e.g., the Bin Packing Problem or the Bin Packing Problem
+with Conﬂict Graph. The KPC is computationally very challenging,
+and solving it via methods based on integer programming is hard
+for graphs with densities between 0.1 and 0.9. In this work, we
+have proposed a new purely-combinatorial branch-and-bound algorithm, called CFS, which relies on the notions of branching and
+pruned sets and on a collection of bounding procedures, based on
+different relaxations, for fathoming the nodes of the implicit enumeration tree. This includes, in particular, bounds based on the
+Multiple-Choice Knapsack Problem and the dual of its linear programming relaxation, for which we have introduced a fast heuristic procedure. We have extensively assessed the performance of
+CFS on a large testbed of instances typically adopted in the literature. The results show that, for graphs with densities equal to
+0.1 or more, our algorithm clearly outperforms the state-of-the-art
+method proposed in Bettinelli et al. (2017) as well as three differ-
+
+ent integer programming formulations (ILP1 , ILP2 , and ILP3 ) solved
+with CPLEX. The speed up is, in some cases, by up to several orders of magnitude in terms of computing times. On the other hand,
+for graphs with a density strictly smaller than 0.1, we suggest the
+adoption of a state-of-the-art ILP solver such as CPLEX, employing
+the formulation ILP1 .
+Future lines of research may include the extension of the ideas
+proposed in this paper to other generalizations of the Knapsack
+Problem with an underlying graph, modeling, for example, precedence constraints, such as the Knapsack Problem with Precedences,
+see, e.g., Boland, Bley, Fricke, Froyland, and Sotirov (2012).
+Acknowledgments
+This work has been partially funded by the Spanish Ministry of
+Science, Innovation and Universities through the project COGDRIVE
+(DPI2017-86915-C3-3-R).
+Appendix
+
+Table 11
+Detailed comparison of CFS, BCM, and ILP2 on all the instances o the main testbed (aggregated by type).
+Class
+
+Type
+
+BCM (Bettinelli et al., 2017)
+
+ILP2
+
+Solved
+
+Time
+
+Steps
+
+Solved
+
+time
+
+Nodes
+
+Solved
+
+CFS
+
+451
+
+Time
+
+Nodes
+
+C1
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+
+10
+19
+27
+96
+10
+11
+5
+5
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+
+59
+93
+164
+368
+130
+174
+175
+178
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.2
+1.1
+8.2
+24.2
+0.0
+0.1
+0.5
+3.6
+
+257
+687
+1302
+4779
+35
+79
+209
+476
+
+C3
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.0
+0.0
+0.1
+1.6
+0.0
+0.0
+0.0
+0.0
+
+390
+1845
+12,293
+117,433
+170
+442
+1751
+8139
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.0
+0.1
+1.3
+27.3
+0.0
+0.0
+0.1
+0.6
+
+1931
+11,076
+79,608
+768,841
+800
+2697
+13,847
+87,145
+
+90
+90
+54
+21
+90
+90
+90
+59
+
+1.5
+25.8
+162.8
+141.9
+0.2
+2.0
+46.5
+35.3
+
+2236
+23,911
+179,946
+194,077
+277
+3035
+45,063
+106,971
+
+C10
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+90
+90
+61
+50
+90
+90
+86
+60
+
+0.1
+25.2
+15.9
+47.2
+0.0
+0.5
+35.9
+7.3
+
+25,284
+2,973,643
+1,278,758
+4,892,372
+342
+109,309
+5,047,011
+1,201,721
+
+90
+73
+50
+40
+90
+90
+70
+49
+
+1.6
+31.9
+18.2
+108.8
+0.0
+6.8
+24.5
+17.4
+
+390,071
+5,538,512
+2,868,097
+10,917,062
+8842
+1,196,970
+5,015,045
+2,616,920
+
+90
+68
+22
+1
+90
+90
+65
+20
+
+3.5
+126.2
+166.0
+575.1
+0.2
+5.3
+143.1
+156.4
+
+3375
+88,374
+146,267
+91,400
+132
+7922
+180,369
+444,277
+
+C15
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+90
+80
+60
+50
+90
+90
+80
+60
+
+0.3
+27.8
+6.9
+48.5
+0.0
+0.4
+23.9
+7.4
+
+94,719
+5,710,907
+1,079,724
+4,892,372
+342
+124,867
+4,870,992
+1,201,721
+
+90
+70
+50
+40
+90
+90
+70
+50
+
+20.5
+26.4
+19.2
+114.6
+0.0
+24.3
+24.4
+18.4
+
+4,630,800
+5,389,661
+2,868,097
+10,917,062
+8842
+5,331,239
+5,015,045
+2,831,336
+
+90
+60
+20
+–
+90
+90
+58
+20
+
+2.8
+112.3
+238.1
+–
+0.2
+3.8
+134.3
+126.5
+
+2450
+110,218
+71,065
+–
+132
+4,214
+152,075
+161,151
+
+R1
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+
+3
+6
+13
+23
+1
+2
+3
+4
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.0
+0.0
+0.0
+0.1
+0.0
+0.0
+0.0
+0.1
+
+24
+37
+75
+150
+15
+28
+54
+84
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.1
+0.8
+4.8
+10.1
+0.0
+0.1
+0.4
+2.7
+
+25
+68
+231
+688
+2
+2
+5
+11
+
+(continued on next page)
+
+452
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+
+Table 11 (continued)
+Class
+
+Type
+
+BCM (Bettinelli et al., 2017)
+
+ILP2
+
+Solved
+
+Time
+
+Steps
+
+Solved
+
+time
+
+Nodes
+
+Solved
+
+Time
+
+Nodes
+
+CFS
+
+R3
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.0
+0.0
+0.0
+0.1
+0.0
+0.0
+0.0
+0.0
+
+42
+115
+465
+1942
+17
+44
+132
+479
+
+90
+90
+90
+90
+90
+90
+90
+90
+
+0.0
+0.0
+0.2
+2.3
+0.0
+0.0
+0.0
+0.2
+
+277
+863
+4036
+20,494
+107
+302
+1044
+3907
+
+90
+90
+90
+50
+90
+90
+90
+90
+
+0.4
+5.0
+55.1
+127.2
+0.1
+0.5
+5.0
+64.7
+
+464
+2840
+24,645
+73,543
+32
+625
+3933
+28,637
+
+R10
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+90
+90
+89
+51
+90
+90
+90
+79
+
+0.0
+0.8
+49.9
+23.2
+0.0
+0.0
+1.5
+19.5
+
+2192
+66,015
+1,926,944
+597,536
+68
+3,919
+130,533
+1,031,967
+
+90
+90
+69
+40
+90
+90
+90
+69
+
+0.1
+9.1
+57.0
+25.0
+0.0
+0.2
+17.7
+43.2
+
+7337
+311,111
+942,483
+570,826
+390
+12,147
+584,911
+735,325
+
+90
+87
+33
+8
+90
+90
+80
+30
+
+1.6
+107.4
+100.0
+333.6
+0.1
+1.5
+91.7
+77.0
+
+1251
+68,381
+223,094
+228,047
+38
+1140
+78,108
+227,310
+
+R15
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+90
+80
+70
+50
+90
+90
+82
+70
+
+0.1
+2.4
+38.7
+12.9
+0.0
+0.0
+11.1
+21.3
+
+19,800
+317,410
+2,743,028
+559,601
+68
+8913
+672,291
+1,283,377
+
+90
+80
+60
+40
+90
+90
+80
+60
+
+0.4
+26.1
+28.5
+22.6
+0.0
+0.3
+20.9
+20.1
+
+35,524
+1,365,483
+1,313,975
+785,357
+396
+23,126
+972,270
+806,071
+
+90
+82
+26
+–
+90
+90
+79
+26
+
+1.6
+136.6
+256.8
+–
+0.1
+1.6
+126.7
+207.3
+
+1264
+61,441
+67,955
+–
+37
+1267
+80,363
+180,780
+
+Table 12
+Detailed comparison of CFS, BCM, and ILP2 on all the instances o the main testbed (aggregated by density).
+Class
+
+Dens
+
+BCM (Bettinelli et al., 2017)
+
+ILP2
+
+Solved
+
+Time
+
+Steps
+
+Solved
+
+Time
+
+Nodes
+
+Solved
+
+CFS
+
+Time
+
+Nodes
+
+C1
+
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+
+1
+2
+3
+5
+9
+23
+32
+66
+66
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+
+80
+81
+110
+131
+133
+177
+201
+296
+299
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.1
+0.2
+0.4
+0.6
+1.3
+2.7
+5.5
+14.4
+17.5
+
+1
+12
+51
+117
+382
+962
+1351
+3300
+2627
+
+C3
+
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.2
+0.1
+0.4
+0.5
+0.5
+0.2
+0.1
+0.0
+0.0
+
+48,344
+5216
+15,303
+20,283
+34,620
+25,993
+8477
+1892
+145
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.3
+2.4
+6.6
+9.1
+9.6
+3.9
+1.0
+0.2
+0.0
+
+4218
+39,115
+109,139
+198,950
+349,663
+256,177
+96,129
+26,353
+6945
+
+77
+79
+72
+66
+52
+50
+50
+66
+72
+
+11.2
+26.7
+27.7
+41.3
+74.6
+41.9
+11.0
+68.4
+27.2
+
+42,906
+17,391
+36,378
+75,282
+163,642
+152,269
+84,391
+41,079
+11,619
+
+C10
+
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+
+47
+50
+50
+70
+80
+80
+80
+80
+80
+
+41.4
+79.0
+1.6
+11.5
+28.8
+1.2
+0.1
+0.0
+0.0
+
+1,771,531
+12,464,774
+377,895
+1,862,474
+3,010,873
+138,326
+9393
+920
+144
+
+33
+30
+50
+50
+69
+80
+80
+80
+80
+
+37.3
+4.4
+64.7
+3.7
+23.6
+52.5
+3.7
+0.3
+0.0
+
+3,781,119
+1,396,644
+13,635,344
+866,608
+3,627,158
+5,334,419
+441,813
+32,404
+7146
+
+47
+30
+30
+48
+50
+50
+50
+70
+71
+
+53.3
+4.5
+3.7
+169.0
+106.4
+38.2
+12.4
+75.8
+28.7
+
+439,083
+240,572
+111,525
+86,596
+93,064
+47,904
+39,167
+17,093
+7,375
+
+C15
+
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+
+30
+50
+50
+70
+80
+80
+80
+
+2.0
+81.0
+1.6
+11.7
+29.6
+1.2
+0.1
+
+609,281
+16,550,640
+377,895
+1,862,474
+3,010,873
+138,326
+9393
+
+30
+30
+50
+50
+70
+80
+80
+
+129.5
+4.6
+67.1
+3.8
+24.9
+55.2
+3.9
+
+28,335,387
+1,413,573
+13,653,789
+866,608
+3,765,881
+5,334,419
+441,813
+
+30
+30
+30
+48
+50
+50
+50
+
+1.6
+3.7
+3.6
+146.7
+94.4
+32.4
+13.6
+
+200,530
+97,639
+78,495
+62,181
+59,007
+31,024
+23,249
+
+(continued on next page)
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+Table 12 (continued)
+Class
+
+Dens
+
+CFS
+
+BCM (Bettinelli et al., 2017)
+
+ILP2
+
+Solved
+
+Time
+
+Steps
+
+Solved
+
+Time
+
+Nodes
+
+Solved
+
+Time
+
+Nodes
+
+0.8
+0.9
+
+80
+80
+
+0.0
+0.0
+
+920
+144
+
+80
+80
+
+0.3
+0.1
+
+32,404
+7146
+
+70
+70
+
+79.4
+36.4
+
+10,799
+3368
+
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+
+4
+5
+9
+11
+9
+8
+9
+6
+2
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+
+31
+34
+41
+54
+57
+67
+75
+84
+86
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.1
+0.2
+0.3
+0.6
+0.9
+1.6
+4.8
+5.3
+7.2
+
+5
+20
+22
+31
+64
+177
+331
+509
+
+R3
+
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+
+90
+231
+335
+595
+783
+845
+521
+194
+48
+
+80
+80
+80
+80
+80
+80
+80
+80
+80
+
+0.1
+0.1
+0.4
+0.7
+0.8
+0.6
+0.3
+0.1
+0.0
+
+269
+1225
+2900
+5340
+7908
+8380
+5545
+2424
+919
+
+80
+80
+80
+78
+70
+70
+70
+74
+78
+
+0.1
+1.0
+10.9
+35.6
+23.3
+46.3
+53.4
+45.2
+31.2
+
+20
+279
+3152
+15,568
+28,598
+40,878
+35,082
+20,093
+7890
+
+R10
+
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+
+71
+59
+70
+70
+80
+80
+80
+80
+79
+
+11.2
+47.9
+42.8
+2.0
+7.2
+0.4
+0.1
+0.0
+0.0
+
+103,812
+1,662,823
+2,245,549
+150,268
+330,597
+23,291
+2738
+307
+53
+
+69
+50
+50
+70
+70
+80
+80
+80
+79
+
+59.9
+39.5
+3.9
+38.9
+3.9
+11.6
+1.3
+0.2
+0.0
+
+451,932
+1,310,130
+189,370
+1,125,654
+149,029
+266,952
+44,168
+7968
+1511
+
+72
+43
+44
+50
+50
+50
+54
+70
+75
+
+16.0
+85.1
+139.2
+53.8
+51.6
+16.2
+38.5
+40.4
+44.6
+
+28,850
+198,861
+221,454
+149,285
+153,972
+91,389
+57,907
+18,381
+7949
+
+R15
+
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+
+32
+50
+70
+70
+80
+80
+80
+80
+80
+
+24.8
+6.1
+57.9
+2.1
+7.7
+0.5
+0.1
+0.0
+0.0
+
+1,314,639
+778,386
+3,883,815
+155,236
+338,821
+23,309
+2,738
+307
+53
+
+30
+50
+50
+70
+70
+80
+80
+80
+80
+
+1.6
+70.7
+4.0
+37.9
+3.6
+10.6
+1.1
+0.2
+0.0
+
+142,708
+3,441,505
+264,416
+1,623,716
+186,837
+368,299
+53,851
+9164
+1629
+
+42
+39
+50
+50
+50
+50
+62
+70
+70
+
+127.9
+96.7
+125.0
+39.5
+38.9
+17.9
+107.7
+61.6
+34.0
+
+108,082
+83,026
+63,217
+45,185
+64,570
+39,013
+30,982
+8017
+2256
+
+R1
+
+Table 13
+Detailed comparison of CFS, BCM, and ILP1 on the very sparse testbed of correlated instances.
+Items/Cap
+
+Density
+
+BCM (Bettinelli et al., 2017)
+
+ILP1
+
+Solved
+
+Time
+
+Solved
+
+Time
+
+Solved
+
+Time
+
+CFS
+
+500/1000
+
+0.001
+0.002
+0.005
+0.01
+0.02
+0.05
+
+10
+10
+10
+10
+10
+1
+
+0.0
+0.0
+0.2
+0.8
+56.7
+165.8
+
+10
+10
+10
+9
+1
+0
+
+0.0
+0.6
+6.7
+103.3
+272.7
+–
+
+10
+10
+10
+10
+10
+10
+
+0.0
+0.0
+0.0
+0.0
+0.3
+90.6
+
+500/2000
+
+0.001
+0.002
+0.005
+0.01
+0.02
+0.05
+
+10
+10
+10
+7
+0
+0
+
+4.2
+0.1
+7.3
+49.8
+–
+–
+
+10
+10
+8
+0
+0
+0
+
+0.4
+5.2
+199.6
+–
+–
+–
+
+10
+10
+10
+10
+9
+0
+
+0.0
+0.0
+0.0
+0.0
+6.1
+–
+
+1000/1000
+
+0.001
+0.002
+0.005
+0.01
+0.02
+0.05
+
+10
+10
+10
+7
+0
+0
+
+0.1
+0.2
+5.9
+163.9
+–
+–
+
+10
+10
+5
+0
+0
+0
+
+5.4
+11.1
+379.9
+–
+–
+–
+
+10
+10
+10
+10
+7
+0
+
+0.0
+0.0
+0.0
+0.1
+2.4
+–
+
+1000/2000
+
+0.001
+0.002
+0.005
+0.01
+0.02
+0.05
+
+10
+10
+7
+4
+0
+0
+
+3.1
+45.8
+182.0
+0.0
+–
+–
+
+9
+7
+0
+0
+0
+0
+
+84.7
+210.3
+–
+–
+–
+–
+
+10
+10
+10
+9
+5
+0
+
+0.0
+0.0
+0.0
+0.1
+193.8
+–
+
+453
+
+454
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+Table 14
+Detailed comparison of CFS, BCM, and ILP1 on the very sparse testbed of random instances.
+Items/Cap
+
+Density
+
+BCM (Bettinelli et al., 2017)
+
+ILP1
+
+Solved
+
+Time
+
+Solved
+
+Time
+
+Solved
+
+Time
+
+CFS
+
+500/1000
+
+0.001
+0.002
+0.005
+0.01
+0.02
+0.05
+
+10
+10
+10
+10
+10
+9
+
+0.0
+0.0
+0.0
+0.1
+1.2
+132.7
+
+10
+10
+10
+10
+10
+3
+
+0.0
+0.1
+0.4
+2.1
+32.8
+133.2
+
+10
+10
+10
+10
+10
+10
+
+0.0
+0.0
+0.0
+0.0
+0.0
+1.2
+
+500/2000
+
+0.001
+0.002
+0.005
+0.01
+0.02
+0.05
+
+10
+10
+10
+10
+3
+0
+
+0.0
+0.0
+0.1
+10.4
+116.5
+–
+
+10
+10
+10
+9
+1
+0
+
+0.1
+0.3
+2.4
+190.7
+39.6
+–
+
+10
+10
+10
+10
+10
+10
+
+0.0
+0.0
+0.0
+0.0
+0.1
+81.2
+
+1000/1000
+
+0.001
+0.002
+0.005
+0.01
+0.02
+0.05
+
+10
+10
+10
+10
+4
+0
+
+0.0
+0.0
+0.1
+15.0
+125.7
+–
+
+10
+10
+10
+8
+1
+0
+
+0.4
+1.6
+16.8
+152.6
+468.8
+–
+
+10
+10
+10
+10
+10
+9
+
+0.0
+0.0
+0.0
+0.1
+0.6
+255.0
+
+1000/2000
+
+0.001
+0.002
+0.005
+0.01
+0.02
+0.05
+
+10
+10
+9
+1
+0
+0
+
+0.0
+0.0
+69.5
+565.8
+–
+–
+
+10
+10
+2
+0
+0
+0
+
+2.3
+20.3
+189.9
+–
+–
+–
+
+10
+10
+10
+10
+10
+0
+
+0.0
+0.0
+0.0
+0.1
+2.1
+–
+
+References
+Akeb, H., Hiﬁ, M., & Mounir, M. E. O. A. (2011). Local branching-based algorithms
+for the disjunctively constrained knapsack problem. Computers & Industrial Engineering, 60(4), 811–820.
+Amaldi, E., Capone, A., Coniglio, S., & Gianoli, L. G. (2013). Energy-aware traﬃc engineering with elastic demands and MMF bandwidth allocation. In Proceedings of
+the 2013 IEEE 18th international workshop on computer aided modeling and design
+of communication links and networks (CAMAD) (pp. 169–174).
+Amaldi, E., Coniglio, S., & Gualandi, S. (2010). Improving cutting plane generation
+with 0–1 inequalities by bi-criteria separation. In Proceedings of the International symposium on experimental algorithms (SEA) (pp. 266–275). Lecture Notes
+in Computer Science, 6049 Springer.
+Amaldi, E., Coniglio, S., & Gualandi, S. (2014). Coordinated cutting plane generation
+via multi-objective separation. Mathematical Programming, 143(1–2), 87–110.
+Basilico, N., Coniglio, S., & Gatti, N. (2016). Methods for ﬁnding leader-follower equilibria with multiple followers. In Proceedings of the 2016 international conference
+on autonomous agents and multiagent systems (AAMAS 2016) (pp. 1363–1364).
+Basilico, N., Coniglio, S., Gatti, N., & Marchesi, A. (2017). Bilevel programming approaches to the computation of optimistic and pessimistic single-leader-multi–
+follower equilibria. In Proceedings of the 16th international symposium on experimental algorithms (SEA 2017). Leibniz International Proceedings in Informatics,
+LIPIcs Schloss Dagstuhl-Leibniz-Zentrum fuer Informatik.
+Bettinelli, A., Cacchiani, V., & Malaguti, E. (2017). A branch-and-bound algorithm for
+the knapsack problem with conﬂict graph. INFORMS Journal on Computing, 29(3),
+457–473.
+Boland, N., Bley, A., Fricke, C., Froyland, G., & Sotirov, R. (2012). Clique-based facets
+for the precedence constrained knapsack problem. Mathematical programming,
+133(1–2), 481–511.
+Bolusani, S., Coniglio, S., Ralphs, T. K., & Tahernejad, S. (2020). A uniﬁed framework
+for multistage and multilevel mixed integer linear optimization. In S. Dempe,
+& A. Zemkoho (Eds.), Bilevel optimization: Advances and next challenges. Springer
+Nature Switzerland AG. In press
+Bourjolly, J.-M., Laporte, G., & Mercure, H. (1997). A combinatorial column generation algorithm for the maximum stable set problem. Operations Research Letters,
+20(1), 21–29.
+Colson, B., Marcotte, P., & Savard, G. (2005). Bilevel programming: A survey. 4OR,
+3(2), 87–107.
+Coniglio, S., & Tieves, M. (2015). On the generation of cutting planes which
+maximize the bound improvement. Proceedings of 14th International Symposium on Experimental Algorithms (SEA). Lecture Notes in Computer Science, 9125
+(pp. 97–109). Springer.
+Corrêa, R., Donne, D. D., Koch, I., & Marenco, J. (2018). General cut-generating procedures for the stable set polytope. Discrete Applied Mathematics, 245, 28–41.
+Croce, F. D., & Tadei, R. (1994). A multi-kp modeling for the maximum-clique problem. European Journal of Operational Research, 73(3), 555–561.
+Dempe, S. (2002). Foundations of bilevel programming. Springer Science & Business
+Media.
+
+DeNegre, S. T., & Ralphs, T. K. (2009). A branch-and-cut algorithm for integer bilevel
+linear programs. In Operations research and cyber-infrastructure (pp. 65–78). New
+York: Springer.
+Dyer, M. (1984). An O(n) algorithm for the multiple-choice knapsack linear program.
+Mathematical Programming, 29(1), 57–63.
+Elhedhli, S., Li, L., Gzara, M., & Naoum-Sawaya, J. (2011). A branch-and-price algorithm for the bin packing problem with conﬂicts. INFORMS Journal on Computing, 23(3), 404–415.
+Falkenauer, E. (1996). A hybrid grouping genetic algorithm for bin packing. Journal
+of Heuristics, 2(1), 5–30.
+Fischetti, M., Ljubic, I., Monaci, M., & Sinnl, M. (2017). A new general-purpose algorithm for mixed-integer bilevel linear programs. Operations Research, 65(6),
+1615–1637.
+Fischetti, M., Ljubic, I., Monaci, M., & Sinnl, M. (2018). On the use of intersection
+cuts for bilevel optimization. Mathematical Programming, 172(1–2), 77–103.
+Fischetti, M., & Lodi, A. (2003). Local branching. Mathematical Programming, 98(1–3),
+23–47.
+Furini, F., Ljubic, I., Malaguti, E., & Paronuzzi, P. (2020). On integer and bilevel formulations for the k-vertex cut problem. Mathematical Programming Computation,
+12, 133–164.
+Furini, F., Ljubic, I., Martin, S., & San Segundo, P. (2019). The maximum clique interdiction problem. European Journal of Operational Research, 277(1), 112–127.
+Giandomenico, M., Letchford, A. N., Rossi, F., & Smriglio, S. (2015). Ellipsoidal relaxations of the stable set problem: Theory and algorithms. SIAM Journal on Optimization, 25(3), 1944–1963.
+Giandomenico, M., Rossi, F., & Smriglio, S. (2013). Strong lift-and-project cutting planes for the stable set problem. Mathematical Programming, 141(1–2),
+165–192.
+Grötschel, M., Lovász, L., & Schrijver, A. (1981). The ellipsoid method and its consequences in combinatorial optimization. Combinatorica, 1(2), 169–197.
+Held, S., Cook, W., & Sewell, E. C. (2012). Maximum-weight stable sets and safe
+lower bounds for graph coloring. Mathematical Programming Computation, 4(4),
+363–381.
+Hiﬁ, M. (2014). An iterative rounding search-based algorithm for the disjunctively
+constrained knapsack problem. Engineering Optimization, 46(8), 1109–1122.
+Hiﬁ, M., & Michrafy, M. (2006). A reactive local search-based algorithm for the disjunctively constrained knapsack problem. Journal of the Operational Research Society, 57(6), 718–726.
+Hiﬁ, M., & Michrafy, M. (2007). Reduction strategies and exact algorithms for the
+disjunctively constrained knapsack problem. Computers & Operations Research,
+34(9), 2657–2673.
+Hiﬁ, M., & Otmani, N. (2012). An algorithm for the disjunctively constrained knapsack problem. International Journal of Operational Research, 13(1), 22–43.
+Hosseinian, S., Fontes, D. B. M. M., & Butenko, S. (2018). A nonconvex quadratic
+optimization approach to the maximum edge weight clique problem. Journal of
+Global Optimization, 72(2), 219–240.
+Håstad, J. (1999). Clique is hard to approximate within n1− . Acta Mathematica, 182,
+105–142.
+
+S. Coniglio, F. Furini and P. San Segundo / European Journal of Operational Research 289 (2021) 435–455
+Jiang, H., Li, C., & Manyà, F. (2017). An exact algorithm for the maximum weight
+clique problem in large graphs. In Proceedings of the thirty-ﬁrst AAAI conference
+on artiﬁcial intelligence (pp. 830–838).
+Karp, R. M. (1972). Reducibility among combinatorial problems. In Complexity of
+computer computations (pp. 85–103). Springer.
+Kellerer, H., Pferschy, U., & Pisinger, D. (2004). Knapsack problems. Springer.
+Li, C., Fang, Z., Jiang, H., & Xu, K. (2018). Incremental upper bound for the maximum
+clique problem. INFORMS Journal on Computing, 30(1), 137–153.
+Li, C., Jiang, H., & Manyà, F. (2017). On minimization of the number of branches in
+branch-and-bound algorithms for the maximum clique problem. Computers &
+Operations Research, 84, 1–15.
+Li, C., Liu, Y., Jiang, H., Many, F., & Li, Y. (2018). A new upper bound for the maximum weight clique problem. European Journal of Operational Research, 270(1),
+66–77.
+Louveaux, Q., & Mathieu, S. (2014). A combinatorial branch-and-bound algorithm for
+box search.. Discrete Optimization, 13, 36–48.
+Martello, S., Pisinger, D., & Toth, P. (1999). Dynamic programming and strong bounds
+for the 0–1 knapsack problem. Management Science, 45(3), 414–424.
+Martello, S., & Toth, P. (1977). An upper bound for the zero-one knapsack problem
+and a branch and bound algorithm. European Journal of Operational Research,
+1(3), 169–175.
+Martello, S., & Toth, P. (1990). Knapsack problems: Algorithms and computer implementations. New York: John Wiley & Sons, Chichester.
+Maslov, E., Batsyn, M., & Pardalos, P. (2014). Speeding up branch and bound algorithms for solving the maximum clique problem. Journal of Global Optimization,
+59(1), 1–21.
+Muritiba, A. F., Iori, M., Malaguti, E., & Toth, P. (2010). Algorithms for the bin packing
+problem with conﬂicts. Informs Journal on Computing, 22(3), 401–415.
+Nemhauser, G., & Sigismondi, G. (1992). A strong cutting plane/branch-and-bound
+algorithm for node packing. Journal of the Operational Research Society, 43(5),
+443–457.
+Pferschy, U., & Schauer, J. (2009). The knapsack problem with conﬂict graphs. Journal
+of Graph Algorithms and Applications, 13(2), 233–249.
+Pisinger, D. (1995). A minimal algorithm for the multiple-choice knapsack problem.
+European Journal of Operational Research, 83(2), 394–410.
+Rebennack, S., Oswald, M., Theis, D., Seitz, H., Reinelt, G., & Pardalos, P. (2011). A
+branch and cut solver for the maximum stable set problem. Journal of Combinatorial Optimization, 21(4), 434–457.
+Rossi, F., & Smriglio, S. (2001). A branch and cut algorithm for the maximum cardinality stable set problem. Operations Research Letters, 28(2), 63–74.
+
+455
+
+Sadykov, R., & Vanderbeck, F. (2013). Bin packing with conﬂicts: a generic
+branch-and-price algorithm. INFORMS Journal on Computing, 25(2), 244–255.
+San Segundo, P., Coniglio, S., Furini, F., & Ljubić, I. (2019). A new branch-and-bound
+algorithm for the maximum edge-weighted clique problem. European Journal of
+Operational Research, 278(1), 76–90.
+San Segundo, P., Furini, F., & Artieda, J. (2019). A new branch-and-bound algorithm
+for the maximum weighted clique problem. Computers & Operations Research,
+110, 18–33.
+San Segundo, P., Matia, F., Rodriguez-Losada, D., & Hernando, M. (2013). An improved bit parallel exact maximum clique algorithm. Optimization Letters, 7(3),
+467–479.
+San Segundo, P., Nikolaev, A., & Batsyn, M. (2015). Infra-chromatic bound for exact
+maximum clique search. Computers & Operations Research, 64, 293–303.
+San Segundo, P., Nikolaev, A., Batsyn, M., & Pardalos, P. M. (2016). Improved infra-chromatic bound for exact maximum clique search. Informatica, Lithuanian
+Academy of Sciences, 27(2), 463–487.
+San Segundo, P., Rodríguez-Losada, D., & Jiménez, A. (2011). An exact bit-parallel
+algorithm for the maximum clique problem. Computers & Operations Research,
+38(2), 571–581.
+San Segundo, P., & Tapia, C. (2014). Relaxed approximate coloring in exact maximum
+clique search. Computers & Operations Research, 44, 185–192.
+Shimizu, S., Yamaguchi, K., & Masuda, S. (2018). A branch-and-bound based exact
+algorithm for the maximum edge-weight clique problem. In Proceedings of the
+international conference on computational science/intelligence & applied informatics, CSII 2018 (pp. 27–47).
+Sinha, P., & Zoltners, A. A. (1979). The multiple-choice knapsack problem. Operations
+Research, 27(3), 503–515.
+Tomita, E., & Kameda, T. (2007). An eﬃcient branch-and-bound algorithm for ﬁnding a maximum clique with computational experiments. Journal of Global optimization, 37(1), 95–111.
+Wei, L., Luo, Z., Baldacci, R., & Lim, A. (2019). A new branch-and-price-and-cut algorithm for one-dimensional bin-packing problems. INFORMS Journal on Computing. Page published online in articles in advance 01 nov 2019
+Wu, W., & Hao, J. K. (2015). A review on algorithms for maximum clique problems.
+European Journal of Operational Research, 242(3), 693–709.
+Yamada, T., Kataoka, S., & Watanabe, K. (2002). Heuristic and exact algorithms for
+the disjunctively constrained knapsack problem. Journal of Information Processing (JIP), 43(9), 2864–2870.
+Zemel, E. (1984). An O(n) algorithm for the linear multiple choice knapsack problem
+and related problems. Information Processing Letters, 18(3), 123–128.
+
+
