@@ -66,7 +66,7 @@ class GreedyLocalSearchSolver:
         for i in order:
             # verifica se l'item i può essere aggiunto alla soluzione corrente:
             #  - peso non supera la capacità residua
-            #  - non conflitta con nessun item già presente
+            #  - non conflitta con nessun item già presente 
             if inst.weights[i] <= inst.c - w_used and not (sol & inst.neighbors[i]):
                 sol.add(i)
                 w_used  += inst.weights[i]
