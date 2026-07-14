@@ -82,7 +82,7 @@ class CFSSolver:
         result = solver.solve()
     """
 
-    def __init__(self, instance, time_limit_sec):
+    def __init__(self, instance, time_limit_sec, external_lb=0, external_sol=None):
         self.instance        = instance
         self.time_limit_sec  = time_limit_sec
         self.nodes           = 0
@@ -163,6 +163,13 @@ class CFSSolver:
             lp = pywraplp.Solver.CreateSolver('GLOP') # il solutore LP (senza vincoli di interezza)
             if not lp:
                 break
+            
+            # IMPOSTA IL TIMEOUT RESIDUO IN MILLISECONDI PER GLOP
+            time_left_ms = int(max(0, self.time_limit_sec - (time.time() - self._start)) * 1000)
+            if time_left_ms <= 0:
+                self.timeout = True
+                break
+            lp.SetTimeLimit(time_left_ms)
 
             x = {}
             for i in range(1, n + 1):
@@ -220,11 +227,20 @@ class CFSSolver:
         if not V_sub or c_sub <= 0:
             return 0
 
+        # Se siamo già in timeout, restituisci un bound lasco sicuro (infinito/molto alto) 
+        # per evitare che il pegging prenda decisioni errate o perda tempo
+        if self._timed_out():
+            return sum(self.instance.profits)
+
         ub = self.lookup_table.get_ub_l1(V_sub, c_sub)
+        if self._timed_out(): return ub
         ub = min(ub, compute_ub_mt(V_sub, c_sub, self.instance))
+        if self._timed_out(): return ub
         ub = min(ub, self.mckp_lookup_table.get_ub_l2(V_sub, c_sub))
+        if self._timed_out(): return ub
 
         cliques = partition_no_budget(V_sub, self.instance.neighbors)
+        if self._timed_out(): return ub
         val_cf  = check_mckp_closed_form(cliques, c_sub, self.instance)
         ub_p    = val_cf if val_cf is not None \
                   else compute_ub_p(V_sub, c_sub, cliques, self.instance)
@@ -345,6 +361,9 @@ class CFSSolver:
         if p_I_hat + ub_l2 <= self.LB:
             return
 
+        if self._timed_out():
+            return
+
         # §6.2 – Step 2: UB_MT (Martello-Toth)
         ub_mt = compute_ub_mt(V_hat, c_hat, self.instance)
         if p_I_hat + ub_mt <= self.LB:
@@ -356,6 +375,8 @@ class CFSSolver:
 
         # §6.2 – Step 3: clique partition (no-budget) → UB_P
         cliques = partition_no_budget(V_hat, self.instance.neighbors)
+        if self._timed_out():
+            return
 
         val_cf = check_mckp_closed_form(cliques, c_hat, self.instance)
         if val_cf is not None:
